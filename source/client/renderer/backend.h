@@ -378,6 +378,7 @@ Framebuffer NewShadowFramebuffer( TextureArray texture_array, u32 layer );
 void DeleteFramebuffer( Framebuffer fb );
 
 bool NewShader( Shader * shader, Span< const char * > srcs, Span< int > lengths, Span< const char * > feedback_varyings = Span< const char * >() );
+bool NewSpirvShader( Shader * shader, Span< const u8 > vertex_spirv, Span< const u8 > fragment_spirv );
 void DeleteShader( Shader shader );
 
 Mesh NewMesh( MeshConfig config );

@@ -190,6 +190,9 @@ static void LoadShaders() {
 
 	BuildShaderSrcs( "glsl/postprocess.glsl", NULL, &srcs, &lengths );
 	ReplaceShader( &shaders.postprocess, srcs.span(), lengths.span() );
+
+	// Shader asdf;
+	// NewSpirvShader( &asdf, AssetBinary( "glsl/text.vs.spirv" ), AssetBinary( "glsl/text.ps.spirv" ) );
 }
 
 void InitShaders() {

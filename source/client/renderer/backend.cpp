@@ -1648,6 +1648,99 @@ bool NewShader( Shader * shader, Span< const char * > srcs, Span< int > lens, Sp
 	return true;
 }
 
+static GLuint UploadSpirv( GLenum type, Span< const u8 > spirv ) {
+	GLuint shader = glCreateShader( type );
+	glShaderBinary( 1, &shader, GL_SHADER_BINARY_FORMAT_SPIR_V, spirv.ptr, spirv.num_bytes() );
+	glSpecializeShader( shader, type == GL_VERTEX_SHADER ? "VSMain" : "PSMain", 0, NULL, NULL );
+
+	GLint status;
+	glGetShaderiv( shader, GL_COMPILE_STATUS, &status );
+
+	if( status == GL_FALSE ) {
+		char buf[ 1024 ];
+		glGetShaderInfoLog( shader, sizeof( buf ), NULL, buf );
+		Com_Printf( S_COLOR_YELLOW "Shader compilation failed: %s\n", buf );
+		glDeleteShader( shader );
+
+		// static char src[ 65536 ];
+		// glGetShaderSource( shader, sizeof( src ), NULL, src );
+		// printf( "%s\n", src );
+
+		return 0;
+	}
+
+	return shader;
+}
+
+bool NewSpirvShader( Shader * shader, Span< const u8 > vertex_spirv, Span< const u8 > fragment_spirv ) {
+	*shader = { };
+
+	GLuint vs = UploadSpirv( GL_VERTEX_SHADER, vertex_spirv );
+	if( vs == 0 )
+		return false;
+	defer { glDeleteShader( vs ); };
+
+	GLuint fs = UploadSpirv( GL_FRAGMENT_SHADER, fragment_spirv );
+	if( fs == 0 )
+		return false;
+	defer { glDeleteShader( fs ); };
+
+	GLuint program = glCreateProgram();
+	glAttachShader( program, vs );
+	glAttachShader( program, fs );
+
+	glLinkProgram( program );
+
+	GLint status;
+	glGetProgramiv( program, GL_LINK_STATUS, &status );
+	if( status == GL_FALSE ) {
+		// GLint len;
+		// glGetProgramiv( program, GL_INFO_LOG_LENGTH, &status );
+		// DynamicString buf( &temp, len )
+		char buf[ 1024 ];
+		glGetProgramInfoLog( program, sizeof( buf ), NULL, buf );
+		Com_Printf( S_COLOR_YELLOW "Shader linking failed: %s\n", buf );
+
+		return false;
+	}
+
+	glUseProgram( program );
+	shader->program = program;
+
+	GLint count, maxlen;
+	glGetProgramiv( program, GL_ACTIVE_UNIFORMS, &count );
+	glGetProgramiv( program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &maxlen );
+
+	size_t num_textures = 0;
+	size_t num_texture_buffers = 0;
+	size_t num_texture_arrays = 0;
+	for( GLint i = 0; i < count; i++ ) {
+		char name[ 128 ];
+		GLint size, len;
+		GLenum type;
+		glGetActiveUniform( program, i, sizeof( name ), &len, &size, &type, name );
+
+		Com_GGPrint( "spirv uniform {} type {}", name, type );
+	}
+
+	glGetProgramiv( program, GL_ACTIVE_UNIFORM_BLOCKS, &count );
+	glGetProgramiv( program, GL_ACTIVE_UNIFORM_BLOCK_MAX_NAME_LENGTH, &maxlen );
+
+	for( GLint i = 0; i < count; i++ ) {
+		char name[ 128 ];
+		GLint len;
+		glGetActiveUniformBlockName( program, i, sizeof( name ), &len, name );
+		glUniformBlockBinding( program, i, i );
+
+		Com_GGPrint( "spirv uniform block {}", name );
+	}
+
+	prev_pipeline.shader = NULL;
+	glUseProgram( 0 );
+
+	return true;
+}
+
 void DeleteShader( Shader shader ) {
 	if( shader.program == 0 )
 		return;
