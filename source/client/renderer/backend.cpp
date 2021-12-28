@@ -30,15 +30,7 @@ enum VertexAttribute : GLuint {
 	VertexAttribute_JointWeights,
 
 	// instance stuff
-	VertexAttribute_MaterialColor,
-	VertexAttribute_MaterialTextureMatrix0,
-	VertexAttribute_MaterialTextureMatrix1,
-	VertexAttribute_OutlineHeight,
-	VertexAttribute_ModelTransformRow0,
-	VertexAttribute_ModelTransformRow1,
-	VertexAttribute_ModelTransformRow2,
-
-	VertexAttribute_ParticlePosition = VertexAttribute_Color,
+	VertexAttribute_ParticlePosition,
 	VertexAttribute_ParticleVelocity,
 	VertexAttribute_ParticleAccelDragRest,
 	VertexAttribute_ParticleUVWH,
@@ -773,8 +765,8 @@ static bool SortDrawCall( const DrawCall & a, const DrawCall & b ) {
 	return a.pipeline.shader < b.pipeline.shader;
 }
 
-static void SetupAttribute( GLuint vao, GLuint buffer, GLuint index, VertexFormat format, u32 stride = 0, u32 offset = 0 ) {
-	if( buffer == 0 )
+static void SetupAttribute( GLuint vao, GPUBuffer buffer, GLuint index, VertexFormat format, u32 stride = 0, u32 offset = 0 ) {
+	if( buffer.buffer == 0 )
 		return;
 
 	GLenum type;
@@ -784,7 +776,7 @@ static void SetupAttribute( GLuint vao, GLuint buffer, GLuint index, VertexForma
 	VertexFormatToGL( format, &type, &num_components, &integral, &normalized, stride == 0 ? &stride : NULL );
 
 	glEnableVertexArrayAttrib( vao, index );
-	glVertexArrayVertexBuffer( vao, index, buffer, 0, stride );
+	glVertexArrayVertexBuffer( vao, index, buffer.buffer, 0, stride );
 	if( integral && !normalized )
 		glVertexArrayAttribIFormat( vao, index, num_components, type, offset );
 	else
@@ -873,15 +865,15 @@ static void SubmitDrawCall( const DrawCall & dc ) {
 	GLenum primitive = PrimitiveTypeToGL( dc.mesh.primitive_type );
 
 	if( dc.instance_type == InstanceType_Particles ) {
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticlePosition, VertexFormat_Floatx4, sizeof( GPUParticle ), offsetof( GPUParticle, position ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleVelocity, VertexFormat_Floatx4, sizeof( GPUParticle ), offsetof( GPUParticle, velocity ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleAccelDragRest, VertexFormat_Floatx3, sizeof( GPUParticle ), offsetof( GPUParticle, acceleration ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleUVWH, VertexFormat_Floatx4, sizeof( GPUParticle ), offsetof( GPUParticle, uvwh ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleStartColor, VertexFormat_U8x4_Norm, sizeof( GPUParticle ), offsetof( GPUParticle, start_color ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleEndColor, VertexFormat_U8x4_Norm, sizeof( GPUParticle ), offsetof( GPUParticle, end_color ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleSize, VertexFormat_Floatx2, sizeof( GPUParticle ), offsetof( GPUParticle, start_size ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleAgeLifetime, VertexFormat_Floatx2, sizeof( GPUParticle ), offsetof( GPUParticle, age ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleFlags, VertexFormat_U32x1, sizeof( GPUParticle ), offsetof( GPUParticle, flags ) );
+		SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ParticlePosition, VertexFormat_Floatx4, sizeof( GPUParticle ), offsetof( GPUParticle, position ) );
+		SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ParticleVelocity, VertexFormat_Floatx4, sizeof( GPUParticle ), offsetof( GPUParticle, velocity ) );
+		SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ParticleAccelDragRest, VertexFormat_Floatx3, sizeof( GPUParticle ), offsetof( GPUParticle, acceleration ) );
+		SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ParticleUVWH, VertexFormat_Floatx4, sizeof( GPUParticle ), offsetof( GPUParticle, uvwh ) );
+		SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ParticleStartColor, VertexFormat_U8x4_Norm, sizeof( GPUParticle ), offsetof( GPUParticle, start_color ) );
+		SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ParticleEndColor, VertexFormat_U8x4_Norm, sizeof( GPUParticle ), offsetof( GPUParticle, end_color ) );
+		SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ParticleSize, VertexFormat_Floatx2, sizeof( GPUParticle ), offsetof( GPUParticle, start_size ) );
+		SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ParticleAgeLifetime, VertexFormat_Floatx2, sizeof( GPUParticle ), offsetof( GPUParticle, age ) );
+		SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ParticleFlags, VertexFormat_U32x1, sizeof( GPUParticle ), offsetof( GPUParticle, flags ) );
 
 		if( dc.update_data.buffer ) {
 			glEnable( GL_RASTERIZER_DISCARD );
@@ -917,67 +909,67 @@ static void SubmitDrawCall( const DrawCall & dc ) {
 		}
 	}
 	else if( dc.instance_type == InstanceType_Model ) {
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_MaterialColor, VertexFormat_Floatx4, sizeof( GPUModelInstance ), offsetof( GPUModelInstance, material.color ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_MaterialTextureMatrix0, VertexFormat_Floatx3, sizeof( GPUModelInstance ), offsetof( GPUModelInstance, material.tcmod[ 0 ] ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_MaterialTextureMatrix1, VertexFormat_Floatx3, sizeof( GPUModelInstance ), offsetof( GPUModelInstance, material.tcmod[ 1 ] ) );
-
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ModelTransformRow0, VertexFormat_Floatx4, sizeof( GPUModelInstance ), offsetof( GPUModelInstance, transform[ 0 ] ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ModelTransformRow1, VertexFormat_Floatx4, sizeof( GPUModelInstance ), offsetof( GPUModelInstance, transform[ 1 ] ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ModelTransformRow2, VertexFormat_Floatx4, sizeof( GPUModelInstance ), offsetof( GPUModelInstance, transform[ 2 ] ) );
-
-		glVertexAttribDivisor( VertexAttribute_MaterialColor, 1 );
-		glVertexAttribDivisor( VertexAttribute_MaterialTextureMatrix0, 1 );
-		glVertexAttribDivisor( VertexAttribute_MaterialTextureMatrix1, 1 );
-
-		glVertexAttribDivisor( VertexAttribute_ModelTransformRow0, 1 );
-		glVertexAttribDivisor( VertexAttribute_ModelTransformRow1, 1 );
-		glVertexAttribDivisor( VertexAttribute_ModelTransformRow2, 1 );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_MaterialColor, VertexFormat_Floatx4, sizeof( GPUModelInstance ), offsetof( GPUModelInstance, material.color ) );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_MaterialTextureMatrix0, VertexFormat_Floatx3, sizeof( GPUModelInstance ), offsetof( GPUModelInstance, material.tcmod[ 0 ] ) );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_MaterialTextureMatrix1, VertexFormat_Floatx3, sizeof( GPUModelInstance ), offsetof( GPUModelInstance, material.tcmod[ 1 ] ) );
+                //
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ModelTransformRow0, VertexFormat_Floatx4, sizeof( GPUModelInstance ), offsetof( GPUModelInstance, transform[ 0 ] ) );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ModelTransformRow1, VertexFormat_Floatx4, sizeof( GPUModelInstance ), offsetof( GPUModelInstance, transform[ 1 ] ) );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ModelTransformRow2, VertexFormat_Floatx4, sizeof( GPUModelInstance ), offsetof( GPUModelInstance, transform[ 2 ] ) );
+                //
+		// glVertexAttribDivisor( VertexAttribute_MaterialColor, 1 );
+		// glVertexAttribDivisor( VertexAttribute_MaterialTextureMatrix0, 1 );
+		// glVertexAttribDivisor( VertexAttribute_MaterialTextureMatrix1, 1 );
+                //
+		// glVertexAttribDivisor( VertexAttribute_ModelTransformRow0, 1 );
+		// glVertexAttribDivisor( VertexAttribute_ModelTransformRow1, 1 );
+		// glVertexAttribDivisor( VertexAttribute_ModelTransformRow2, 1 );
 
 		GLenum type = dc.mesh.indices_format == IndexFormat_U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
 		glDrawElementsInstanced( primitive, dc.num_vertices, type, 0, dc.num_instances );
 	}
 	else if( dc.instance_type == InstanceType_ModelShadows ) {
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ModelTransformRow0, VertexFormat_Floatx4, sizeof( GPUModelShadowsInstance ), offsetof( GPUModelShadowsInstance, transform[ 0 ] ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ModelTransformRow1, VertexFormat_Floatx4, sizeof( GPUModelShadowsInstance ), offsetof( GPUModelShadowsInstance, transform[ 1 ] ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ModelTransformRow2, VertexFormat_Floatx4, sizeof( GPUModelShadowsInstance ), offsetof( GPUModelShadowsInstance, transform[ 2 ] ) );
-
-		glVertexAttribDivisor( VertexAttribute_ModelTransformRow0, 1 );
-		glVertexAttribDivisor( VertexAttribute_ModelTransformRow1, 1 );
-		glVertexAttribDivisor( VertexAttribute_ModelTransformRow2, 1 );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ModelTransformRow0, VertexFormat_Floatx4, sizeof( GPUModelShadowsInstance ), offsetof( GPUModelShadowsInstance, transform[ 0 ] ) );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ModelTransformRow1, VertexFormat_Floatx4, sizeof( GPUModelShadowsInstance ), offsetof( GPUModelShadowsInstance, transform[ 1 ] ) );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ModelTransformRow2, VertexFormat_Floatx4, sizeof( GPUModelShadowsInstance ), offsetof( GPUModelShadowsInstance, transform[ 2 ] ) );
+                //
+		// glVertexAttribDivisor( VertexAttribute_ModelTransformRow0, 1 );
+		// glVertexAttribDivisor( VertexAttribute_ModelTransformRow1, 1 );
+		// glVertexAttribDivisor( VertexAttribute_ModelTransformRow2, 1 );
 
 		GLenum type = dc.mesh.indices_format == IndexFormat_U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
 		glDrawElementsInstanced( primitive, dc.num_vertices, type, 0, dc.num_instances );
 	}
 	else if( dc.instance_type == InstanceType_ModelOutlines ) {
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_MaterialColor, VertexFormat_Floatx4, sizeof( GPUModelOutlinesInstance ), offsetof( GPUModelOutlinesInstance, color ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_OutlineHeight, VertexFormat_Floatx1, sizeof( GPUModelOutlinesInstance ), offsetof( GPUModelOutlinesInstance, height ) );
-
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ModelTransformRow0, VertexFormat_Floatx4, sizeof( GPUModelOutlinesInstance ), offsetof( GPUModelOutlinesInstance, transform[ 0 ] ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ModelTransformRow1, VertexFormat_Floatx4, sizeof( GPUModelOutlinesInstance ), offsetof( GPUModelOutlinesInstance, transform[ 1 ] ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ModelTransformRow2, VertexFormat_Floatx4, sizeof( GPUModelOutlinesInstance ), offsetof( GPUModelOutlinesInstance, transform[ 2 ] ) );
-
-		glVertexAttribDivisor( VertexAttribute_MaterialColor, 1 );
-		glVertexAttribDivisor( VertexAttribute_OutlineHeight, 1 );
-
-		glVertexAttribDivisor( VertexAttribute_ModelTransformRow0, 1 );
-		glVertexAttribDivisor( VertexAttribute_ModelTransformRow1, 1 );
-		glVertexAttribDivisor( VertexAttribute_ModelTransformRow2, 1 );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_MaterialColor, VertexFormat_Floatx4, sizeof( GPUModelOutlinesInstance ), offsetof( GPUModelOutlinesInstance, color ) );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_OutlineHeight, VertexFormat_Floatx1, sizeof( GPUModelOutlinesInstance ), offsetof( GPUModelOutlinesInstance, height ) );
+                //
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ModelTransformRow0, VertexFormat_Floatx4, sizeof( GPUModelOutlinesInstance ), offsetof( GPUModelOutlinesInstance, transform[ 0 ] ) );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ModelTransformRow1, VertexFormat_Floatx4, sizeof( GPUModelOutlinesInstance ), offsetof( GPUModelOutlinesInstance, transform[ 1 ] ) );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ModelTransformRow2, VertexFormat_Floatx4, sizeof( GPUModelOutlinesInstance ), offsetof( GPUModelOutlinesInstance, transform[ 2 ] ) );
+                //
+		// glVertexAttribDivisor( VertexAttribute_MaterialColor, 1 );
+		// glVertexAttribDivisor( VertexAttribute_OutlineHeight, 1 );
+                //
+		// glVertexAttribDivisor( VertexAttribute_ModelTransformRow0, 1 );
+		// glVertexAttribDivisor( VertexAttribute_ModelTransformRow1, 1 );
+		// glVertexAttribDivisor( VertexAttribute_ModelTransformRow2, 1 );
 
 		GLenum type = dc.mesh.indices_format == IndexFormat_U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
 		glDrawElementsInstanced( primitive, dc.num_vertices, type, 0, dc.num_instances );
 	}
 	else if( dc.instance_type == InstanceType_ModelSilhouette ) {
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_MaterialColor, VertexFormat_Floatx4, sizeof( GPUModelSilhouetteInstance ), offsetof( GPUModelSilhouetteInstance, color ) );
-
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ModelTransformRow0, VertexFormat_Floatx4, sizeof( GPUModelSilhouetteInstance ), offsetof( GPUModelSilhouetteInstance, transform[ 0 ] ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ModelTransformRow1, VertexFormat_Floatx4, sizeof( GPUModelSilhouetteInstance ), offsetof( GPUModelSilhouetteInstance, transform[ 1 ] ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ModelTransformRow2, VertexFormat_Floatx4, sizeof( GPUModelSilhouetteInstance ), offsetof( GPUModelSilhouetteInstance, transform[ 2 ] ) );
-
-		glVertexAttribDivisor( VertexAttribute_MaterialColor, 1 );
-
-		glVertexAttribDivisor( VertexAttribute_ModelTransformRow0, 1 );
-		glVertexAttribDivisor( VertexAttribute_ModelTransformRow1, 1 );
-		glVertexAttribDivisor( VertexAttribute_ModelTransformRow2, 1 );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_MaterialColor, VertexFormat_Floatx4, sizeof( GPUModelSilhouetteInstance ), offsetof( GPUModelSilhouetteInstance, color ) );
+                //
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ModelTransformRow0, VertexFormat_Floatx4, sizeof( GPUModelSilhouetteInstance ), offsetof( GPUModelSilhouetteInstance, transform[ 0 ] ) );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ModelTransformRow1, VertexFormat_Floatx4, sizeof( GPUModelSilhouetteInstance ), offsetof( GPUModelSilhouetteInstance, transform[ 1 ] ) );
+		// SetupAttribute( dc.mesh.vao, dc.instance_data, VertexAttribute_ModelTransformRow2, VertexFormat_Floatx4, sizeof( GPUModelSilhouetteInstance ), offsetof( GPUModelSilhouetteInstance, transform[ 2 ] ) );
+                //
+		// glVertexAttribDivisor( VertexAttribute_MaterialColor, 1 );
+                //
+		// glVertexAttribDivisor( VertexAttribute_ModelTransformRow0, 1 );
+		// glVertexAttribDivisor( VertexAttribute_ModelTransformRow1, 1 );
+		// glVertexAttribDivisor( VertexAttribute_ModelTransformRow2, 1 );
 
 		GLenum type = dc.mesh.indices_format == IndexFormat_U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
 		glDrawElementsInstanced( primitive, dc.num_vertices, type, 0, dc.num_instances );
@@ -1541,13 +1533,6 @@ bool NewShader( Shader * shader, Span< const char * > srcs, Span< int > lens, Sp
 		glBindAttribLocation( program, VertexAttribute_Color, "a_Color" );
 		glBindAttribLocation( program, VertexAttribute_JointIndices, "a_JointIndices" );
 		glBindAttribLocation( program, VertexAttribute_JointWeights, "a_JointWeights" );
-		glBindAttribLocation( program, VertexAttribute_MaterialColor, "a_MaterialColor" );
-		glBindAttribLocation( program, VertexAttribute_MaterialTextureMatrix0, "a_MaterialTextureMatrix0" );
-		glBindAttribLocation( program, VertexAttribute_MaterialTextureMatrix1, "a_MaterialTextureMatrix1" );
-		glBindAttribLocation( program, VertexAttribute_OutlineHeight, "a_OutlineHeight" );
-		glBindAttribLocation( program, VertexAttribute_ModelTransformRow0, "a_ModelTransformRow0" );
-		glBindAttribLocation( program, VertexAttribute_ModelTransformRow1, "a_ModelTransformRow1" );
-		glBindAttribLocation( program, VertexAttribute_ModelTransformRow2, "a_ModelTransformRow2" );
 	}
 
 	if( !feedback ) {
@@ -1664,23 +1649,22 @@ Mesh NewMesh( MeshConfig config ) {
 	DebugLabel( GL_VERTEX_ARRAY, vao, config.name );
 
 	if( config.unified_buffer.buffer == 0 ) {
-		SetupAttribute( vao, config.positions.buffer, VertexAttribute_Position, config.positions_format );
-		SetupAttribute( vao, config.normals.buffer, VertexAttribute_Normal, config.normals_format );
-		SetupAttribute( vao, config.tex_coords.buffer, VertexAttribute_TexCoord, config.tex_coords_format );
-		SetupAttribute( vao, config.colors.buffer, VertexAttribute_Color, config.colors_format );
-		SetupAttribute( vao, config.joints.buffer, VertexAttribute_JointIndices, config.joints_format );
-		SetupAttribute( vao, config.weights.buffer, VertexAttribute_JointWeights, config.weights_format );
+		SetupAttribute( vao, config.positions, VertexAttribute_Position, config.positions_format );
+		SetupAttribute( vao, config.normals, VertexAttribute_Normal, config.normals_format );
+		SetupAttribute( vao, config.tex_coords, VertexAttribute_TexCoord, config.tex_coords_format );
+		SetupAttribute( vao, config.colors, VertexAttribute_Color, config.colors_format );
+		SetupAttribute( vao, config.joints, VertexAttribute_JointIndices, config.joints_format );
+		SetupAttribute( vao, config.weights, VertexAttribute_JointWeights, config.weights_format );
 	}
 	else {
 		assert( config.stride != 0 );
 
-		GLuint buffer = config.unified_buffer.buffer;
-		SetupAttribute( vao, buffer, VertexAttribute_Position, config.positions_format, config.stride, config.positions_offset );
-		SetupAttribute( vao, buffer, VertexAttribute_Normal, config.normals_format, config.stride, config.normals_offset );
-		SetupAttribute( vao, buffer, VertexAttribute_TexCoord, config.tex_coords_format, config.stride, config.tex_coords_offset );
-		SetupAttribute( vao, buffer, VertexAttribute_Color, config.colors_format, config.stride, config.colors_offset );
-		SetupAttribute( vao, buffer, VertexAttribute_JointIndices, config.joints_format, config.stride, config.joints_offset );
-		SetupAttribute( vao, buffer, VertexAttribute_JointWeights, config.weights_format, config.stride, config.weights_offset );
+		SetupAttribute( vao, config.unified_buffer, VertexAttribute_Position, config.positions_format, config.stride, config.positions_offset );
+		SetupAttribute( vao, config.unified_buffer, VertexAttribute_Normal, config.normals_format, config.stride, config.normals_offset );
+		SetupAttribute( vao, config.unified_buffer, VertexAttribute_TexCoord, config.tex_coords_format, config.stride, config.tex_coords_offset );
+		SetupAttribute( vao, config.unified_buffer, VertexAttribute_Color, config.colors_format, config.stride, config.colors_offset );
+		SetupAttribute( vao, config.unified_buffer, VertexAttribute_JointIndices, config.joints_format, config.stride, config.joints_offset );
+		SetupAttribute( vao, config.unified_buffer, VertexAttribute_JointWeights, config.weights_format, config.stride, config.weights_offset );
 	}
 
 	glVertexArrayElementBuffer( vao, config.indices.buffer );

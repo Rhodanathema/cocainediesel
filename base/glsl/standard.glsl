@@ -8,9 +8,6 @@
 v2f vec3 v_Position;
 v2f vec3 v_Normal;
 v2f vec2 v_TexCoord;
-#if INSTANCED
-flat v2f vec4 v_MaterialColor;
-#endif
 
 #if VERTEX_COLORS
 v2f vec4 v_Color;
@@ -28,18 +25,23 @@ in vec4 a_Color;
 in vec2 a_TexCoord;
 
 #if INSTANCED
-in vec4 a_MaterialColor;
-in vec3 a_MaterialTextureMatrix0;
-in vec3 a_MaterialTextureMatrix1;
+struct InstanceMaterial {
+	vec4 color;
+	vec3 texture_matrix[ 2 ];
+};
 
-in vec4 a_ModelTransformRow0;
-in vec4 a_ModelTransformRow1;
-in vec4 a_ModelTransformRow2;
+layout( std430 ) readonly buffer b_InstanceMaterials {
+	InstanceMaterial instance_materials[];
+};
+
+layout( std430 ) readonly buffer b_InstanceTransforms {
+	mat3x4 instance_transforms[];
+};
 #endif
 
 vec2 ApplyTCMod( vec2 uv ) {
 #if INSTANCED
-	mat3x2 m = transpose( mat2x3( a_MaterialTextureMatrix0, a_MaterialTextureMatrix1 ) );
+	mat3x2 m = transpose( mat2x3( instance_materials[ gl_InstanceID ].texture_matrix[ 0 ], instance_materials[ gl_InstanceID ].texture_matrix[ 1 ] ) );
 #else
 	mat3x2 m = transpose( mat2x3( u_TextureMatrix[ 0 ], u_TextureMatrix[ 1 ] ) );
 #endif
@@ -48,7 +50,7 @@ vec2 ApplyTCMod( vec2 uv ) {
 
 void main() {
 #if INSTANCED
-	mat4 u_M = transpose( mat4( a_ModelTransformRow0, a_ModelTransformRow1, a_ModelTransformRow2, vec4( 0.0, 0.0, 0.0, 1.0 ) ) );
+	mat4 u_M = instance_transforms[ gl_InstanceID ];
 #endif
 	vec4 Position = a_Position;
 	vec3 Normal = a_Normal;
@@ -67,10 +69,6 @@ void main() {
 
 #if VERTEX_COLORS
 	v_Color = sRGBToLinear( a_Color );
-#endif
-
-#if INSTANCED
-	v_MaterialColor = a_MaterialColor;
 #endif
 
 	gl_Position = u_P * u_V * u_M * Position;
@@ -119,13 +117,13 @@ void main() {
 	vec3 normal = normalize( v_Normal );
 #if APPLY_DRAWFLAT
 #if INSTANCED
-	vec4 diffuse = v_MaterialColor;
+	vec4 diffuse = instance_materials[ gl_InstanceID ].color;
 #else
 	vec4 diffuse = u_MaterialColor;
 #endif
 #else
 #if INSTANCED
-	vec4 color = v_MaterialColor;
+	vec4 color = instance_materials[ gl_InstanceID ].color;
 #else
 	vec4 color = u_MaterialColor;
 #endif

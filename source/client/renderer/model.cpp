@@ -31,6 +31,26 @@ struct ModelInstanceCollection {
 	u32 num_groups;
 };
 
+struct GPUModelInstance {
+	GPUMaterial material;
+	Mat3x4 transform;
+};
+
+struct GPUModelShadowsInstance {
+	Mat3x4 transform;
+};
+
+struct GPUModelOutlinesInstance {
+	Mat3x4 transform;
+	Vec4 color;
+	float height;
+};
+
+struct GPUModelSilhouetteInstance {
+	Mat3x4 transform;
+	Vec4 color;
+};
+
 static ModelInstanceCollection< GPUModelInstance > model_instance_collection;
 static ModelInstanceCollection< GPUModelShadowsInstance > model_shadows_instance_collection;
 static ModelInstanceCollection< GPUModelOutlinesInstance > model_outlines_instance_collection;
@@ -144,7 +164,7 @@ static void DrawModelPrimitiveInstanced( const Model * model, const Model::Primi
 }
 
 template< typename T >
-static void AddInstanceToCollection( ModelInstanceCollection< T > & collection, const Model * model, const Model::Primitive * primitive, PipelineState pipeline, T & instance, u64 hash ) {
+static void AddInstanceToCollection( ModelInstanceCollection< T > & collection, const Model * model, const Model::Primitive * primitive, const PipelineState & pipeline, const T & instance, u64 hash ) {
 	u64 idx = collection.num_groups;
 	if( !collection.groups_hashtable.get( hash, &idx ) ) {
 		assert( collection.num_groups < ARRAY_COUNT( collection.groups ) );
@@ -176,9 +196,7 @@ static void DrawModelNode( DrawModelConfig::DrawModel config, const Model * mode
 
 	GPUModelInstance instance = { };
 	instance.material = gpu_material;
-	instance.transform[ 0 ] = transform.row0();
-	instance.transform[ 1 ] = transform.row1();
-	instance.transform[ 2 ] = transform.row2();
+	instance.transform = Mat3x4( transform );
 
 	AddInstanceToCollection( model_instance_collection, model, primitive, pipeline, instance, hash );
 }
@@ -204,9 +222,7 @@ static void DrawShadowsNode( DrawModelConfig::DrawShadows config, const Model * 
 		hash = Hash64( &i, sizeof( i ), hash );
 
 		GPUModelShadowsInstance instance = { };
-		instance.transform[ 0 ] = transform.row0();
-		instance.transform[ 1 ] = transform.row1();
-		instance.transform[ 2 ] = transform.row2();
+		instance.transform = Mat3x4( transform );
 
 		AddInstanceToCollection( model_shadows_instance_collection, model, primitive, pipeline, instance, hash );
 	}
@@ -229,9 +245,7 @@ static void DrawOutlinesNode( DrawModelConfig::DrawOutlines config, const Model 
 	GPUModelOutlinesInstance instance = { };
 	instance.color = config.outline_color;
 	instance.height = config.outline_height;
-	instance.transform[ 0 ] = transform.row0();
-	instance.transform[ 1 ] = transform.row1();
-	instance.transform[ 2 ] = transform.row2();
+	instance.transform = Mat3x4( transform );
 
 	AddInstanceToCollection( model_outlines_instance_collection, model, primitive, pipeline, instance, hash );
 }
@@ -252,9 +266,7 @@ static void DrawSilhouetteNode( DrawModelConfig::DrawSilhouette config, const Mo
 
 	GPUModelSilhouetteInstance instance = { };
 	instance.color = config.silhouette_color;
-	instance.transform[ 0 ] = transform.row0();
-	instance.transform[ 1 ] = transform.row1();
-	instance.transform[ 2 ] = transform.row2();
+	instance.transform = Mat3x4( transform );
 
 	AddInstanceToCollection( model_silhouette_instance_collection, model, primitive, pipeline, instance, hash );
 }
@@ -329,16 +341,16 @@ void DrawModel( DrawModelConfig config, const Model * model, const Mat4 & transf
 void InitModelInstances() {
 	ZoneScoped;
 	for( u32 i = 0; i < MAX_INSTANCE_GROUPS; i++ ) {
-		model_instance_collection.groups[ i ].instance_data = NewGPUBuffer( sizeof( GPUModelInstance ) * MAX_INSTANCES );
+		model_instance_collection.groups[ i ].instance_data = NewGPUBuffer( sizeof( model_instance_collection.groups[ i ].instances ) );
 		model_instance_collection.num_groups = 0;
 
-		model_shadows_instance_collection.groups[ i ].instance_data = NewGPUBuffer( sizeof( GPUModelShadowsInstance ) * MAX_INSTANCES );
+		model_shadows_instance_collection.groups[ i ].instance_data = NewGPUBuffer( sizeof( model_shadows_instance_collection.groups[ i ].instances ) );
 		model_shadows_instance_collection.num_groups = 0;
 
-		model_outlines_instance_collection.groups[ i ].instance_data = NewGPUBuffer( sizeof( GPUModelOutlinesInstance ) * MAX_INSTANCES );
+		model_outlines_instance_collection.groups[ i ].instance_data = NewGPUBuffer( sizeof( model_outlines_instance_collection.groups[ i ].instances ) );
 		model_outlines_instance_collection.num_groups = 0;
 
-		model_silhouette_instance_collection.groups[ i ].instance_data = NewGPUBuffer( sizeof( GPUModelSilhouetteInstance ) * MAX_INSTANCES );
+		model_silhouette_instance_collection.groups[ i ].instance_data = NewGPUBuffer( sizeof( model_silhouette_instance_collection.groups[ i ].instances ) );
 		model_silhouette_instance_collection.num_groups = 0;
 	}
 }
