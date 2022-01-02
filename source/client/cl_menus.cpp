@@ -606,7 +606,7 @@ static void ServerBrowser() {
 	ImGui::NextColumn();
 
 	Span< const ServerBrowserEntry > servers = GetServerBrowserEntries();
-	for( int i = 0; i < servers.n; i++ ) {
+	for( size_t i = 0; i < servers.n; i++ ) {
 		if( !servers[ i ].have_details )
 			continue;
 
@@ -639,7 +639,7 @@ static void DemoBrowser() {
 
 	ImGui::Checkbox( "Try to force load demos from old versions. Comes with no warranty", &yolodemo );
 
-	ImGui::Columns( 4, "demobrowser", false );
+	ImGui::Columns( 5, "demobrowser", false );
 
 	ImGui::Text( "Filename" );
 	ImGui::NextColumn();
@@ -649,10 +649,12 @@ static void DemoBrowser() {
 	ImGui::NextColumn();
 	ImGui::Text( "Date" );
 	ImGui::NextColumn();
+	ImGui::Text( "Game version" );
+	ImGui::NextColumn();
 
 	ImGui::Columns( 1 );
 	ImGui::BeginChild( "demos" );
-	ImGui::Columns( 4 );
+	ImGui::Columns( 5 );
 
 	for( const DemoBrowserEntry & demo : GetDemoBrowserEntries() ) {
 		bool clicked = ImGui::Selectable( demo.path, false, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick );
@@ -663,6 +665,12 @@ static void DemoBrowser() {
 		ImGui::NextColumn();
 		ImGui::Text( "%s", demo.date );
 		ImGui::NextColumn();
+
+		bool old_version = !StrEqual( demo.version, APP_VERSION );
+		ImGui::PushStyleColor( ImGuiCol_Text, old_version ? vec4_red : vec4_green );
+		ImGui::Text( "%s", demo.version );
+		ImGui::NextColumn();
+		ImGui::PopStyleColor();
 
 		if( clicked && ImGui::IsMouseDoubleClicked( 0 ) ) {
 			const char * cmd = yolodemo ? "yolodemo" : "demo";

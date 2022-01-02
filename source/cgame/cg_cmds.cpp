@@ -38,6 +38,10 @@ static void CG_SC_ChatPrint() {
 		return;
 	}
 
+	if( cg_chat->integer == 2 && !teamonly ) {
+		return;
+	}
+
 	const char * text = Cmd_Argv( 2 );
 
 	if( who == 0 ) {
@@ -119,7 +123,7 @@ void CG_SC_AutoRecordAction( const char *action ) {
 
 	// TODO: AutoRecordName segfaults without this because sometimes we
 	// receive configstrings before the map when connecting
-	if( !cgs.rendered_a_frame ) {
+	if( cls.state != CA_ACTIVE ) {
 		return;
 	}
 

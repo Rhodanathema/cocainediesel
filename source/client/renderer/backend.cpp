@@ -72,8 +72,7 @@ static u32 num_vertices_this_frame;
 static bool in_frame;
 
 struct UBO {
-	GLuint ubo;
-	u8 * buffer;
+	StreamingBuffer stream;
 	u32 bytes_used;
 };
 
@@ -407,6 +406,103 @@ static void PlotVRAMUsage() {
 	}
 }
 
+static GLuint DSACreateBuffer( bool ubo ) {
+	GLuint buf;
+	if( GLAD_GL_ARB_direct_state_access != 0 ) {
+		glCreateBuffers( 1, &buf );
+	}
+	else {
+		GLenum target = ubo ? GL_UNIFORM_BUFFER : GL_SHADER_STORAGE_BUFFER;
+		glGenBuffers( 1, &buf );
+		glBindBuffer( target, buf );
+		glBindBuffer( target, 0 );
+	}
+	return buf;
+}
+
+static void DSAHacks() {
+	if( GLAD_GL_ARB_direct_state_access == 0 ) {
+		glCreateVertexArrays = []( GLsizei n, GLuint * vaos ) {
+			assert( n == 1 );
+			glGenVertexArrays( 1, vaos );
+			glBindVertexArray( vaos[ 0 ] );
+			glBindVertexArray( 0 );
+		};
+		glVertexArrayElementBuffer = []( GLuint vao, GLuint buf ) {
+			glBindVertexArray( vao );
+			glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, buf );
+			glBindVertexArray( 0 );
+		};
+		glEnableVertexArrayAttrib = glEnableVertexArrayAttribEXT;
+
+		glNamedBufferStorage = glNamedBufferStorageEXT;
+		glNamedBufferSubData = glNamedBufferSubDataEXT;
+		glGetNamedBufferSubData = glGetNamedBufferSubDataEXT;
+		glMapNamedBufferRange = glMapNamedBufferRangeEXT;
+		glUnmapNamedBuffer = glUnmapNamedBufferEXT;
+
+		glCreateTextures = []( GLenum target, GLsizei n, GLuint * textures ) {
+			assert( n == 1 );
+			glGenTextures( 1, textures );
+			glBindTexture( target, textures[ 0 ] );
+			glBindTexture( target, 0 );
+		};
+
+		glCreateFramebuffers = []( GLsizei n, GLuint * fbos ) {
+			assert( n == 1 );
+			glGenFramebuffers( 1, fbos );
+			glBindFramebuffer( GL_FRAMEBUFFER, fbos[ 0 ] );
+			glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+		};
+		glCheckNamedFramebufferStatus = glCheckNamedFramebufferStatusEXT;
+		glNamedFramebufferTextureLayer = glNamedFramebufferTextureLayerEXT;
+		glNamedFramebufferTexture = glNamedFramebufferTextureEXT;
+		glNamedFramebufferDrawBuffers = glFramebufferDrawBuffersEXT;
+		glBlitNamedFramebuffer = []( GLuint src, GLuint dst, GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter ) {
+			GLint bound;
+			glGetIntegerv( GL_DRAW_FRAMEBUFFER_BINDING, &bound );
+			assert( bound >= 0 && GLuint( bound ) == dst );
+
+			glBindFramebuffer( GL_READ_FRAMEBUFFER, src );
+			glBlitFramebuffer( srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter );
+			glBindFramebuffer( GL_READ_FRAMEBUFFER, 0 );
+		};
+	}
+	else if( GLAD_GL_EXT_direct_state_access == 0 ) {
+		glVertexArrayVertexAttribOffsetEXT = []( GLuint vao, GLuint buffer, GLuint index, GLint num_components, GLenum type, GLboolean normalized, GLsizei stride, GLintptr offset ) {
+			glVertexArrayVertexBuffer( vao, index, buffer, 0, stride );
+			glVertexArrayAttribFormat( vao, index, num_components, type, normalized, offset );
+		};
+		glVertexArrayVertexAttribIOffsetEXT = []( GLuint vao, GLuint buffer, GLuint index, GLint num_components, GLenum type, GLsizei stride, GLintptr offset ) {
+			glVertexArrayVertexBuffer( vao, index, buffer, 0, stride );
+			glVertexArrayAttribIFormat( vao, index, num_components, type, offset );
+		};
+
+		glTextureStorage2DEXT = []( GLuint tex, GLenum target, GLsizei mips, GLenum format, GLsizei w, GLsizei h ) { glTextureStorage2D( tex, mips, format, w, h ); };
+		glTextureStorage3DEXT = []( GLuint tex, GLenum target, GLsizei mips, GLenum format, GLsizei w, GLsizei h, GLsizei d ) { glTextureStorage3D( tex, mips, format, w, h, d ); };
+		glTextureStorage2DMultisampleEXT = []( GLuint tex, GLenum target, GLsizei samples, GLenum format, GLsizei w, GLsizei h, GLboolean fixed_sample_locations ) {
+			glTextureStorage2DMultisample( tex, samples, format, w, h, fixed_sample_locations );
+		};
+		glTextureParameterfEXT = []( GLuint tex, GLenum target, GLenum param, GLfloat value ) { glTextureParameterf( tex, param, value ); };
+		glTextureParameterfvEXT = []( GLuint tex, GLenum target, GLenum param, const GLfloat * values ) { glTextureParameterfv( tex, param, values ); };
+		glTextureParameteriEXT = []( GLuint tex, GLenum target, GLenum param, GLint value ) { glTextureParameteri( tex, param, value ); };
+		glTextureSubImage2DEXT = []( GLuint tex, GLenum target, GLint mip, GLint x, GLint y, GLsizei w, GLsizei h, GLenum format, GLenum type, const void * data ) {
+			glTextureSubImage2D( tex, mip, x, y, w, h, format, type, data );
+		};
+		glCompressedTextureSubImage2DEXT = []( GLuint tex, GLenum target, GLint mip, GLint x, GLint y, GLsizei w, GLsizei h, GLenum format, GLsizei n, const void * data ) {
+			glCompressedTextureSubImage2D( tex, mip, x, y, w, h, format, n, data );
+		};
+		glCompressedTextureSubImage3DEXT = []( GLuint tex, GLenum target, GLint mip, GLint x, GLint y, GLint z, GLsizei w, GLsizei h, GLsizei d, GLenum format, GLsizei n, const void * data ) {
+			glCompressedTextureSubImage3D( tex, mip, x, y, z, w, h, d, format, n, data );
+		};
+		glBindMultiTextureEXT = []( GLuint unit, GLenum target, GLuint tex ) {
+			glBindTextureUnit( unit - GL_TEXTURE0, tex );
+		};
+	}
+}
+
+static StreamingBuffer NewStreamingBuffer( u32 len, bool ubo );
+
 void InitRenderBackend() {
 	ZoneScoped;
 	TracyGpuContext;
@@ -418,7 +514,7 @@ void InitRenderBackend() {
 		} required_extensions[] = {
 			{ "GL_ARB_buffer_storage", GLAD_GL_ARB_buffer_storage },
 			{ "GL_ARB_clip_control", GLAD_GL_ARB_clip_control },
-			{ "GL_ARB_direct_state_access", GLAD_GL_ARB_direct_state_access },
+			{ "GL_ARB_direct_state_access/GL_EXT_direct_state_access", GLAD_GL_ARB_direct_state_access + GLAD_GL_EXT_direct_state_access },
 			{ "GL_EXT_texture_compression_s3tc", GLAD_GL_EXT_texture_compression_s3tc },
 			{ "GL_EXT_texture_filter_anisotropic", GLAD_GL_EXT_texture_filter_anisotropic },
 			{ "GL_EXT_texture_sRGB", GLAD_GL_EXT_texture_sRGB },
@@ -444,6 +540,8 @@ void InitRenderBackend() {
 			Fatal( "GL_MAX_VERTEX_SHADER_STORAGE_BLOCKS too small" );
 		}
 	}
+
+	DSAHacks();
 
 	{
 		GLint context_flags;
@@ -490,8 +588,7 @@ void InitRenderBackend() {
 	assert( max_ubo_size >= s32( UNIFORM_BUFFER_SIZE ) );
 
 	for( UBO & ubo : ubos ) {
-		glCreateBuffers( 1, &ubo.ubo );
-		glNamedBufferStorage( ubo.ubo, UNIFORM_BUFFER_SIZE, NULL, GL_MAP_WRITE_BIT );
+		ubo.stream = NewStreamingBuffer( UNIFORM_BUFFER_SIZE, true );
 	}
 
 	in_frame = false;
@@ -504,7 +601,7 @@ void InitRenderBackend() {
 
 void ShutdownRenderBackend() {
 	for( UBO ubo : ubos ) {
-		glDeleteBuffers( 1, &ubo.ubo );
+		DeleteStreamingBuffer( ubo.stream );
 	}
 
 	render_passes.shutdown();
@@ -527,8 +624,7 @@ void RenderBackendBeginFrame() {
 	num_vertices_this_frame = 0;
 
 	for( UBO & ubo : ubos ) {
-		ubo.buffer = ( u8 * ) glMapNamedBufferRange( ubo.ubo, 0, UNIFORM_BUFFER_SIZE, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT );
-		assert( ubo.buffer != NULL );
+		StreamingBufferFrame( &ubo.stream );
 		ubo.bytes_used = 0;
 	}
 
@@ -589,7 +685,12 @@ static void SetPipelineState( PipelineState pipeline, bool ccw_winding ) {
 				if( pipeline.textures[ j ].name_hash == name_hash ) {
 					const Texture * texture = pipeline.textures[ j ].texture;
 					if( texture != prev_texture ) {
-						glBindTextureUnit( i, texture->texture );
+						GLenum target = texture->msaa ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D;
+						if( prev_texture != NULL && prev_texture->msaa != texture->msaa ) {
+							GLenum prev_target = prev_texture->msaa ? GL_TEXTURE_2D_MULTISAMPLE : GL_TEXTURE_2D;
+							glBindMultiTextureEXT( GL_TEXTURE0 + i, prev_target, 0 );
+						}
+						glBindMultiTextureEXT( GL_TEXTURE0 + i, target, texture->texture );
 						prev_bindings.textures[ i ] = texture;
 					}
 					found = true;
@@ -598,9 +699,10 @@ static void SetPipelineState( PipelineState pipeline, bool ccw_winding ) {
 			}
 		}
 
-		if( !found ) {
-			glBindTextureUnit( i, 0 );
-			prev_bindings.textures[ i ] = { };
+		if( !found && prev_texture != NULL ) {
+			GLenum prev_target = prev_texture->msaa ? GL_TEXTURE_2D : GL_TEXTURE_2D_MULTISAMPLE;
+			glBindMultiTextureEXT( GL_TEXTURE0 + i, prev_target, 0 );
+			prev_bindings.textures[ i ] = NULL;
 		}
 	}
 
@@ -642,7 +744,7 @@ static void SetPipelineState( PipelineState pipeline, bool ccw_winding ) {
 				if( pipeline.texture_arrays[ j ].name_hash == name_hash ) {
 					TextureArray texture = pipeline.texture_arrays[ j ].ta;
 					if( texture.texture != prev_texture.texture ) {
-						glBindTextureUnit( tex_unit, texture.texture );
+						glBindMultiTextureEXT( GL_TEXTURE0 + tex_unit, GL_TEXTURE_2D_ARRAY, texture.texture );
 						prev_bindings.texture_arrays[ i ] = texture;
 					}
 					found = true;
@@ -652,7 +754,7 @@ static void SetPipelineState( PipelineState pipeline, bool ccw_winding ) {
 		}
 
 		if( !found ) {
-			glBindTextureUnit( tex_unit, 0 );
+			glBindMultiTextureEXT( GL_TEXTURE0 + tex_unit, GL_TEXTURE_2D_ARRAY, 0 );
 			prev_bindings.texture_arrays[ i ] = { };
 		}
 	}
@@ -776,11 +878,12 @@ static void SetupAttribute( GLuint vao, GPUBuffer buffer, GLuint index, VertexFo
 	VertexFormatToGL( format, &type, &num_components, &integral, &normalized, stride == 0 ? &stride : NULL );
 
 	glEnableVertexArrayAttrib( vao, index );
-	glVertexArrayVertexBuffer( vao, index, buffer.buffer, 0, stride );
-	if( integral && !normalized )
-		glVertexArrayAttribIFormat( vao, index, num_components, type, offset );
-	else
-		glVertexArrayAttribFormat( vao, index, num_components, type, normalized, offset );
+	if( integral && !normalized ) {
+		glVertexArrayVertexAttribIOffsetEXT( vao, buffer.buffer, index, num_components, type, stride, offset );
+	}
+	else {
+		glVertexArrayVertexAttribOffsetEXT( vao, buffer.buffer, index, num_components, type, normalized, stride, offset );
+	}
 }
 
 static void SubmitFramebufferBlit( const RenderPass & pass ) {
@@ -994,13 +1097,6 @@ void RenderBackendSubmitFrame() {
 	in_frame = false;
 
 	{
-		ZoneScopedN( "Unmap UBOs" );
-		for( UBO ubo : ubos ) {
-			glUnmapNamedBuffer( ubo.ubo );
-		}
-	}
-
-	{
 		ZoneScopedN( "Sort draw calls" );
 		std::stable_sort( draw_calls.begin(), draw_calls.end(), SortDrawCall );
 	}
@@ -1082,13 +1178,14 @@ UniformBlock UploadUniforms( const void * data, size_t size ) {
 		Fatal( "Ran out of UBO space" );
 
 	UniformBlock block;
-	block.ubo = ubo->ubo;
+	block.ubo = GetStreamingBufferBuffer( ubo->stream ).buffer;
 	block.offset = offset;
 	block.size = AlignPow2( checked_cast< u32 >( size ), u32( 16 ) );
 
 	// memset so we don't leave any gaps. good for write combined memory!
-	memset( ubo->buffer + ubo->bytes_used, 0, offset - ubo->bytes_used );
-	memcpy( ubo->buffer + offset, data, size );
+	u8 * mapping = GetStreamingBufferMapping( ubo->stream );
+	memset( mapping + ubo->bytes_used, 0, offset - ubo->bytes_used );
+	memcpy( mapping + offset, data, size );
 	ubo->bytes_used = offset + size;
 
 	return block;
@@ -1099,15 +1196,13 @@ void ReadGPUBuffer( GPUBuffer buf, void * data, u32 len, u32 offset ) {
 }
 
 GPUBuffer NewParticleGPUBuffer( u32 n ) {
-	GPUBuffer buf;
-	glCreateBuffers( 1, &buf.buffer );
+	GPUBuffer buf = { DSACreateBuffer( false ) };
 	glNamedBufferStorage( buf.buffer, n * sizeof( GPUParticle ), NULL, GL_DYNAMIC_STORAGE_BIT );
 	return buf;
 }
 
 GPUBuffer NewGPUBuffer( const void * data, u32 len, const char * name ) {
-	GPUBuffer buf;
-	glCreateBuffers( 1, &buf.buffer );
+	GPUBuffer buf = { DSACreateBuffer( false ) };
 	// TODO: probably want more control over flags than this
 	glNamedBufferStorage( buf.buffer, len, data, data != NULL ? 0 : GL_DYNAMIC_STORAGE_BIT );
 
@@ -1136,6 +1231,55 @@ void DeferDeleteGPUBuffer( GPUBuffer buf ) {
 	deferred_buffer_deletes.add( buf );
 }
 
+static StreamingBuffer NewStreamingBuffer( u32 len, bool ubo ) {
+	StreamingBuffer stream = { };
+	for( size_t i = 0; i < ARRAY_COUNT( stream.buffers ); i++ ) {
+		GLbitfield flags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+		stream.buffers[ i ].buffer = DSACreateBuffer( ubo );
+		glNamedBufferStorage( stream.buffers[ i ].buffer, len, NULL, flags );
+		stream.mappings[ i ] = ( u8 * ) glMapNamedBufferRange( stream.buffers[ i ].buffer, 0, len, flags );
+	}
+
+	return stream;
+}
+
+StreamingBuffer NewStreamingBuffer( u32 len ) {
+	return NewStreamingBuffer( len, false );
+}
+
+void StreamingBufferFrame( StreamingBuffer * stream ) {
+	stream->fences[ stream->current ] = bit_cast< u64 >( glFenceSync( GL_SYNC_GPU_COMMANDS_COMPLETE, 0 ) );
+	stream->current = ( stream->current + 1 ) % ARRAY_COUNT( stream->buffers );
+
+	if( stream->fences[ stream->current ] != 0 ) {
+		GLsync sync = bit_cast< GLsync >( stream->fences[ stream->current ] );
+		glClientWaitSync( sync, GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED );
+		glDeleteSync( sync );
+		stream->fences[ stream->current ] = 0;
+	}
+}
+
+u8 * GetStreamingBufferMapping( StreamingBuffer stream ) {
+	return stream.mappings[ stream.current ];
+}
+
+GPUBuffer GetStreamingBufferBuffer( StreamingBuffer stream ) {
+	return stream.buffers[ stream.current ];
+}
+
+void DeleteStreamingBuffer( StreamingBuffer stream ) {
+	for( GPUBuffer buf : stream.buffers ) {
+		glUnmapNamedBuffer( buf.buffer );
+		DeleteGPUBuffer( buf );
+	}
+
+	for( u64 fence : stream.fences ) {
+		if( fence != 0 ) {
+			glDeleteSync( bit_cast< GLsync >( fence ) );
+		}
+	}
+}
+
 static Texture NewTextureSamples( TextureConfig config, int msaa_samples ) {
 	Texture texture = { };
 	texture.width = config.width;
@@ -1156,21 +1300,20 @@ static Texture NewTextureSamples( TextureConfig config, int msaa_samples ) {
 		return texture;
 	}
 
-	glTextureStorage2D( texture.texture, config.num_mipmaps, internal_format, config.width, config.height );
+	glTextureStorage2DEXT( texture.texture, target, config.num_mipmaps, internal_format, config.width, config.height );
 
-	glTextureParameteri( texture.texture, GL_TEXTURE_WRAP_S, TextureWrapToGL( config.wrap ) );
-	glTextureParameteri( texture.texture, GL_TEXTURE_WRAP_T, TextureWrapToGL( config.wrap ) );
+	glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_WRAP_S, TextureWrapToGL( config.wrap ) );
+	glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_WRAP_T, TextureWrapToGL( config.wrap ) );
 
 	GLenum min_filter = GL_NONE;
 	GLenum mag_filter = GL_NONE;
 	TextureFilterToGL( config.filter, &min_filter, &mag_filter );
-	glTextureParameteri( texture.texture, GL_TEXTURE_MIN_FILTER, min_filter );
-	glTextureParameteri( texture.texture, GL_TEXTURE_MAG_FILTER, mag_filter );
-	glTextureParameteri( texture.texture, GL_TEXTURE_MAX_LEVEL, config.num_mipmaps - 1 );
-	glTextureParameterf( texture.texture, GL_TEXTURE_MAX_ANISOTROPY_EXT, max_anisotropic_filtering );
+	glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_MIN_FILTER, min_filter );
+	glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_MAG_FILTER, mag_filter );
+	glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_MAX_LEVEL, config.num_mipmaps - 1 );
 
 	if( config.wrap == TextureWrap_Border ) {
-		glTextureParameterfv( texture.texture, GL_TEXTURE_BORDER_COLOR, config.border_color.ptr() );
+		glTextureParameterfvEXT( texture.texture, target, GL_TEXTURE_BORDER_COLOR, config.border_color.ptr() );
 	}
 
 	if( !CompressedTextureFormat( config.format ) ) {
@@ -1178,38 +1321,40 @@ static Texture NewTextureSamples( TextureConfig config, int msaa_samples ) {
 
 		if( channels == GL_RED ) {
 			if( config.format == TextureFormat_A_U8 ) {
-				glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_R, GL_ONE );
-				glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_G, GL_ONE );
-				glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_B, GL_ONE );
-				glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_A, GL_RED );
+				glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_R, GL_ONE );
+				glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_G, GL_ONE );
+				glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_B, GL_ONE );
+				glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_A, GL_RED );
 			}
 			else {
-				glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_R, GL_RED );
-				glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_G, GL_RED );
-				glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_B, GL_RED );
-				glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_A, GL_ONE );
+				glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_R, GL_RED );
+				glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_G, GL_RED );
+				glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_B, GL_RED );
+				glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_A, GL_ONE );
 			}
 		}
 		else if( channels == GL_RG && config.format == TextureFormat_RA_U8 ) {
-			glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_R, GL_RED );
-			glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_G, GL_RED );
-			glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_B, GL_RED );
-			glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_A, GL_GREEN );
+			glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_R, GL_RED );
+			glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_G, GL_RED );
+			glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_B, GL_RED );
+			glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_A, GL_GREEN );
 		}
 
 		if( config.data != NULL ) {
-			glTextureSubImage2D( texture.texture, 0, 0, 0,
+			glTextureSubImage2DEXT( texture.texture, target, 0, 0, 0,
 				config.width, config.height, channels, type, config.data );
 		}
 	}
 	else {
 		assert( config.data != NULL );
 
+		glTextureParameterfEXT( texture.texture, target, GL_TEXTURE_MAX_ANISOTROPY_EXT, max_anisotropic_filtering );
+
 		if( config.format == TextureFormat_BC4 ) {
-			glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_R, GL_ONE );
-			glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_G, GL_ONE );
-			glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_B, GL_ONE );
-			glTextureParameteri( texture.texture, GL_TEXTURE_SWIZZLE_A, GL_RED );
+			glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_R, GL_ONE );
+			glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_G, GL_ONE );
+			glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_B, GL_ONE );
+			glTextureParameteriEXT( texture.texture, target, GL_TEXTURE_SWIZZLE_A, GL_RED );
 		}
 
 		const char * cursor = ( const char * ) config.data;
@@ -1219,7 +1364,7 @@ static Texture NewTextureSamples( TextureConfig config, int msaa_samples ) {
 			u32 size = ( BitsPerPixel( config.format ) * w * h ) / 8;
 			assert( size < S32_MAX );
 
-			glCompressedTextureSubImage2D( texture.texture, i, 0, 0,
+			glCompressedTextureSubImage2DEXT( texture.texture, target, i, 0, 0,
 				w, h, internal_format, size, cursor );
 
 			cursor += size;
@@ -1246,18 +1391,17 @@ TextureArray NewTextureArray( const TextureArrayConfig & config ) {
 
 	GLenum internal_format, channels, type;
 	TextureFormatToGL( config.format, &internal_format, &channels, &type );
-	glTextureStorage3D( ta.texture, config.num_mipmaps, internal_format, config.width, config.height, config.layers );
+	glTextureStorage3DEXT( ta.texture, GL_TEXTURE_2D_ARRAY, config.num_mipmaps, internal_format, config.width, config.height, config.layers );
 
-	glTextureParameteri( ta.texture, GL_TEXTURE_WRAP_S, GL_REPEAT );
-	glTextureParameteri( ta.texture, GL_TEXTURE_WRAP_T, GL_REPEAT );
-	glTextureParameteri( ta.texture, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR );
-	glTextureParameteri( ta.texture, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-	glTextureParameteri( ta.texture, GL_TEXTURE_MAX_LEVEL, config.num_mipmaps - 1 );
-	glTextureParameterf( ta.texture, GL_TEXTURE_MAX_ANISOTROPY_EXT, max_anisotropic_filtering );
+	glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT );
+	glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT );
+	glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR );
+	glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+	glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_LEVEL, config.num_mipmaps - 1 );
 
 	if( config.format == TextureFormat_Shadow ) {
-		glTextureParameteri( ta.texture, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL );
-		glTextureParameteri( ta.texture, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE );
+		glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL );
+		glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE );
 	}
 
 	if( !CompressedTextureFormat( config.format ) ) {
@@ -1265,31 +1409,33 @@ TextureArray NewTextureArray( const TextureArrayConfig & config ) {
 
 		if( channels == GL_RED ) {
 			if( config.format == TextureFormat_A_U8 ) {
-				glTextureParameteri( ta.texture, GL_TEXTURE_SWIZZLE_R, GL_ONE );
-				glTextureParameteri( ta.texture, GL_TEXTURE_SWIZZLE_G, GL_ONE );
-				glTextureParameteri( ta.texture, GL_TEXTURE_SWIZZLE_B, GL_ONE );
-				glTextureParameteri( ta.texture, GL_TEXTURE_SWIZZLE_A, GL_RED );
+				glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_SWIZZLE_R, GL_ONE );
+				glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_SWIZZLE_G, GL_ONE );
+				glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_SWIZZLE_B, GL_ONE );
+				glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_SWIZZLE_A, GL_RED );
 			}
 			else {
-				glTextureParameteri( ta.texture, GL_TEXTURE_SWIZZLE_R, GL_RED );
-				glTextureParameteri( ta.texture, GL_TEXTURE_SWIZZLE_G, GL_RED );
-				glTextureParameteri( ta.texture, GL_TEXTURE_SWIZZLE_B, GL_RED );
-				glTextureParameteri( ta.texture, GL_TEXTURE_SWIZZLE_A, GL_ONE );
+				glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_SWIZZLE_R, GL_RED );
+				glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_SWIZZLE_G, GL_RED );
+				glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_SWIZZLE_B, GL_RED );
+				glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_SWIZZLE_A, GL_ONE );
 			}
 		}
 		else if( channels == GL_RG && config.format == TextureFormat_RA_U8 ) {
-			glTextureParameteri( ta.texture, GL_TEXTURE_SWIZZLE_R, GL_RED );
-			glTextureParameteri( ta.texture, GL_TEXTURE_SWIZZLE_G, GL_RED );
-			glTextureParameteri( ta.texture, GL_TEXTURE_SWIZZLE_B, GL_RED );
-			glTextureParameteri( ta.texture, GL_TEXTURE_SWIZZLE_A, GL_GREEN );
+			glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_SWIZZLE_R, GL_RED );
+			glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_SWIZZLE_G, GL_RED );
+			glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_SWIZZLE_B, GL_RED );
+			glTextureParameteriEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_SWIZZLE_A, GL_GREEN );
 		}
 
 		if( config.data != NULL ) {
-			glTextureSubImage3D( ta.texture, 0, 0, 0, 0,
+			glTextureSubImage3DEXT( ta.texture, GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0,
 				config.width, config.height, config.layers, channels, type, config.data );
 		}
 	}
 	else {
+		glTextureParameterfEXT( ta.texture, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_ANISOTROPY_EXT, max_anisotropic_filtering );
+
 		const char * cursor = ( const char * ) config.data;
 		for( u32 i = 0; i < config.num_mipmaps; i++ ) {
 			u32 w = config.width >> i;
@@ -1297,7 +1443,7 @@ TextureArray NewTextureArray( const TextureArrayConfig & config ) {
 			u32 size = ( BitsPerPixel( config.format ) * w * h * config.layers ) / 8;
 			assert( size < S32_MAX );
 
-			glCompressedTextureSubImage3D( ta.texture, i, 0, 0, 0,
+			glCompressedTextureSubImage3DEXT( ta.texture, GL_TEXTURE_2D_ARRAY, i, 0, 0, 0,
 				w, h, config.layers, internal_format, size, cursor );
 
 			cursor += size;

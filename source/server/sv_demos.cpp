@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon/array.h"
 #include "qcommon/fs.h"
 #include "qcommon/string.h"
+#include "qcommon/version.h"
 
 #define SV_DEMO_DIR va( "demos/server%s%s", sv_demodir->value[0] ? "/" : "", sv_demodir->value[0] ? sv_demodir->value : "" )
 
@@ -59,7 +60,7 @@ void SV_Demo_WriteSnap() {
 
 	for( i = 0; i < sv_maxclients->integer; i++ ) {
 		if( svs.clients[i].state >= CS_SPAWNED && svs.clients[i].edict &&
-			!( svs.clients[i].edict->r.svflags & SVF_NOCLIENT ) ) {
+			!( svs.clients[i].edict->s.svflags & SVF_NOCLIENT ) ) {
 			break;
 		}
 	}
@@ -115,7 +116,7 @@ void SV_Demo_Start_f() {
 
 	bool any_players = false;
 	for( int i = 0; i < sv_maxclients->integer; i++ ) {
-		if( svs.clients[i].state >= CS_SPAWNED && svs.clients[i].edict && !( svs.clients[i].edict->r.svflags & SVF_NOCLIENT ) ) {
+		if( svs.clients[i].state >= CS_SPAWNED && svs.clients[i].edict && !( svs.clients[i].edict->s.svflags & SVF_NOCLIENT ) ) {
 			any_players = true;
 			break;
 		}
@@ -199,6 +200,7 @@ static void SV_Demo_Stop( bool cancel, bool silent ) {
 		SV_SetDemoMetaKeyValue( "duration", temp( "{}", (int)ceilf( (double)svs.demo.duration / 1000.0 ) ) );
 		SV_SetDemoMetaKeyValue( "mapname", sv.mapname );
 		SV_SetDemoMetaKeyValue( "matchscore", sv.configstrings[CS_MATCHSCORE] );
+		SV_SetDemoMetaKeyValue( "version", APP_VERSION );
 
 		SNAP_WriteDemoMetaData( svs.demo.tempname, svs.demo.meta_data, svs.demo.meta_data_realsize );
 
