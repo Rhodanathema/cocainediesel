@@ -9,6 +9,20 @@ v2f vec3 v_Position;
 v2f vec3 v_Normal;
 v2f vec2 v_TexCoord;
 
+#ifdef INSTANCED
+struct Instance {
+	mat3x4 transform;
+	Material material;
+};
+
+layout( std430 ) readonly buffer b_Instances {
+	Instance instances[];
+};
+
+v2f flat int v_Instance;
+#endif
+
+
 #if VERTEX_COLORS
 v2f vec4 v_Color;
 #endif
@@ -24,17 +38,6 @@ in vec3 a_Normal;
 in vec4 a_Color;
 in vec2 a_TexCoord;
 
-#ifdef INSTANCED
-struct Instance {
-	mat3x4 transform;
-	Material material;
-};
-
-layout( std430 ) readonly buffer b_Instances {
-	Instance instances[];
-};
-#endif
-
 vec2 ApplyTCMod( vec2 uv ) {
 #if INSTANCED
 	mat3x2 m = transpose( mat2x3( instances[ gl_InstanceID ].material.texture_matrix[ 0 ], instances[ gl_InstanceID ].material.texture_matrix[ 1 ] ) );
@@ -47,6 +50,7 @@ vec2 ApplyTCMod( vec2 uv ) {
 void main() {
 #if INSTANCED
 	mat4 u_M = AffineToMat4( instances[ gl_InstanceID ].transform );
+	v_Instance = gl_InstanceID;
 #endif
 	vec4 Position = a_Position;
 	vec3 Normal = a_Normal;
@@ -113,13 +117,13 @@ void main() {
 	vec3 normal = normalize( v_Normal );
 #if APPLY_DRAWFLAT
 #if INSTANCED
-	vec4 diffuse = instances[ gl_InstanceID ].material.color;
+	vec4 diffuse = instances[ v_Instance ].material.color;
 #else
 	vec4 diffuse = u_MaterialColor;
 #endif
 #else
 #if INSTANCED
-	vec4 color = instances[ gl_InstanceID ].material.color;
+	vec4 color = instances[ v_Instance ].material.color;
 #else
 	vec4 color = u_MaterialColor;
 #endif
