@@ -1871,7 +1871,7 @@ void DrawMesh( const Mesh & mesh, const PipelineState & pipeline, u32 num_vertic
 	num_vertices_this_frame += dc.num_vertices;
 }
 
-void DrawInstancedMesh( const Mesh & mesh, const PipelineState & pipeline, GPUBuffer instance_data, u32 num_instances, InstanceType instance_type, u32 num_vertices_override, u32 index_offset ) {
+void DrawInstancedMesh( const Mesh & mesh, const PipelineState & pipeline, u32 num_instances, InstanceType instance_type, u32 num_vertices_override, u32 index_offset ) {
 	assert( in_frame );
 	assert( pipeline.pass != U8_MAX );
 	assert( pipeline.shader != NULL );
@@ -1882,7 +1882,6 @@ void DrawInstancedMesh( const Mesh & mesh, const PipelineState & pipeline, GPUBu
 	dc.num_vertices = num_vertices_override == 0 ? mesh.num_vertices : num_vertices_override;
 	dc.index_offset = index_offset;
 	dc.instance_type = instance_type;
-	dc.instance_data = instance_data;
 	dc.num_instances = num_instances;
 	draw_calls.add( dc );
 

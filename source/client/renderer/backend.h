@@ -377,7 +377,7 @@ void DeleteMesh( const Mesh & mesh );
 void DeferDeleteMesh( const Mesh & mesh );
 
 void DrawMesh( const Mesh & mesh, const PipelineState & pipeline, u32 num_vertices_override = 0, u32 first_index = 0 );
-void DrawInstancedMesh( const Mesh & mesh, const PipelineState & pipeline, GPUBuffer instance_data, u32 num_instances, InstanceType instance_type, u32 num_vertices_override = 0, u32 first_index = 0 );
+void DrawInstancedMesh( const Mesh & mesh, const PipelineState & pipeline, u32 num_instances, InstanceType instance_type, u32 num_vertices_override = 0, u32 first_index = 0 );
 void UpdateParticles( const Mesh & mesh, GPUBuffer vb_in, GPUBuffer vb_out, float radius, u32 num_particles, float dt );
 void UpdateParticlesFeedback( const Mesh & mesh, GPUBuffer vb_in, GPUBuffer vb_out, GPUBuffer vb_feedback, float radius, u32 num_particles, float dt );
 void DrawInstancedParticles( const Mesh & mesh, GPUBuffer vb, BlendFunc blend_func, u32 num_particles );

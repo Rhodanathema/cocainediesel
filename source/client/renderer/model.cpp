@@ -32,8 +32,8 @@ struct ModelInstanceCollection {
 };
 
 struct GPUModelInstance {
-	GPUMaterial material;
 	Mat3x4 transform;
+	GPUMaterial material;
 };
 
 struct GPUModelShadowsInstance {
@@ -153,13 +153,15 @@ void DrawModelPrimitive( const Model * model, const Model::Primitive * primitive
 	}
 }
 
-static void DrawModelPrimitiveInstanced( const Model * model, const Model::Primitive * primitive, const PipelineState & pipeline, GPUBuffer instance_data, u32 num_instances, InstanceType instance_type ) {
+static void DrawModelPrimitiveInstanced( const Model * model, const Model::Primitive * primitive, PipelineState pipeline, GPUBuffer instance_data, u32 num_instances, InstanceType instance_type ) {
+	pipeline.set_buffer( "b_Instances", instance_data );
+
 	if( primitive->num_vertices != 0 ) {
 		u32 index_size = model->mesh.indices_format == IndexFormat_U16 ? sizeof( u16 ) : sizeof( u32 );
-		DrawInstancedMesh( model->mesh, pipeline, instance_data, num_instances, instance_type, primitive->num_vertices, primitive->first_index * index_size );
+		DrawInstancedMesh( model->mesh, pipeline, num_instances, instance_type, primitive->num_vertices, primitive->first_index * index_size );
 	}
 	else {
-		DrawInstancedMesh( primitive->mesh, pipeline, instance_data, num_instances, instance_type );
+		DrawInstancedMesh( primitive->mesh, pipeline, num_instances, instance_type );
 	}
 }
 

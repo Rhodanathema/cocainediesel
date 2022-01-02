@@ -6,26 +6,24 @@ layout( std140 ) uniform u_Silhouette {
 	vec4 u_SilhouetteColor;
 };
 
-#if INSTANCED
-flat v2f vec4 v_SilhouetteColor;
-#endif
-
 #if VERTEX_SHADER
 
 in vec4 a_Position;
 
 #if INSTANCED
-in vec4 a_MaterialColor;
+struct Instance {
+	mat3x4 transform;
+	vec4 color;
+};
 
-in vec4 a_ModelTransformRow0;
-in vec4 a_ModelTransformRow1;
-in vec4 a_ModelTransformRow2;
+layout( std430 ) readonly buffer b_Instances {
+	Instance instances[];
+};
 #endif
 
 void main() {
 #if INSTANCED
-	mat4 u_M = transpose( mat4( a_ModelTransformRow0, a_ModelTransformRow1, a_ModelTransformRow2, vec4( 0.0, 0.0, 0.0, 1.0 ) ) );
-	v_SilhouetteColor = a_MaterialColor;
+	mat4 u_M = AffineToMat4( instances[ gl_InstanceID ].transform );
 #endif
 	vec4 Position = a_Position;
 	vec3 NormalDontCare = vec3( 0 );
@@ -43,7 +41,7 @@ out vec4 f_Albedo;
 
 void main() {
 #if INSTANCED
-	f_Albedo = v_SilhouetteColor;
+	f_Albedo = instances[ gl_InstanceID ].color;
 #else
 	f_Albedo = u_SilhouetteColor;
 #endif
