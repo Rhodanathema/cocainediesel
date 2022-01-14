@@ -435,37 +435,26 @@ void CG_SC_Obituary() {
 		self_obituary.damage_type = damage_type;
 	}
 
-	if( attacker == victim ) {
-		current->type = OBITUARY_SUICIDE;
-
+	if( assistor == NULL ) {
 		CG_AddChat( temp( "{} {}{} {}",
-			victim_name,
+			attacker_name,
 			ImGuiColorToken( rgba8_diesel_yellow ), obituary,
 			victim_name
 		) );
 	}
 	else {
-		if( assistor == NULL ) {
-			CG_AddChat( temp( "{} {}{} {}",
-				attacker_name,
-				ImGuiColorToken( rgba8_diesel_yellow ), obituary,
-				victim_name
-			) );
-		}
-		else {
-			const char * conjugation = RandomElement( &rng, conjunctions );
-			CG_AddChat( temp( "{} {}{} {} {}{} {}",
-				attacker_name,
-				ImGuiColorToken( 255, 255, 255, 255 ), conjugation,
-				assistor_name,
-				ImGuiColorToken( rgba8_diesel_yellow ), obituary,
-				victim_name
-			) );
-		}
+		const char * conjugation = RandomElement( &rng, conjunctions );
+		CG_AddChat( temp( "{} {}{} {} {}{} {}",
+			attacker_name,
+			ImGuiColorToken( 255, 255, 255, 255 ), conjugation,
+			assistor_name,
+			ImGuiColorToken( rgba8_diesel_yellow ), obituary,
+			victim_name
+		) );
+	}
 
-		if( ISVIEWERENTITY( attackerNum ) ) {
-			CG_CenterPrint( temp( "{} {}", obituary, Uppercase( &temp, victim ) ) );
-		}
+	if( ISVIEWERENTITY( attackerNum ) && attacker != victim ) {
+		CG_CenterPrint( temp( "{} {}", obituary, Uppercase( &temp, victim ) ) );
 	}
 }
 
@@ -928,22 +917,19 @@ enum {
 
 static float AmmoFrac( const SyncPlayerState * ps, WeaponType weap, int ammo ) {
 	const WeaponDef * def = GS_GetWeaponDef( weap );
-	float ammo_frac = 1.0f;
-	if( def->clip_size != 0 ) {
-		if( weap == ps->weapon && ( ps->weapon_state == WeaponState_Reloading || ps->weapon_state == WeaponState_StagedReloading ) ) {
-			if( def->staged_reload_time != 0 ) {
-				u16 t = ps->weapon_state == WeaponState_StagedReloading ? def->staged_reload_time : def->reload_time;
-				ammo_frac = ( float( ammo ) + Unlerp01( u16( 0 ), ps->weapon_state_time, t ) ) / float( def->clip_size );
-			}
-			else {
-				ammo_frac = Min2( 1.0f, float( ps->weapon_state_time ) / float( def->reload_time ) );
-			}
-		}
-		else {
-			ammo_frac = float( ammo ) / float( def->clip_size );
-		}
+	if( def->clip_size == 0 )
+		return 1.0f;
+
+	if( weap != ps->weapon || ( ps->weapon_state != WeaponState_Reloading && ps->weapon_state != WeaponState_StagedReloading ) ) {
+		return float( ammo ) / float( def->clip_size );
 	}
-	return ammo_frac;
+
+	if( def->staged_reload_time != 0 ) {
+		u16 t = ps->weapon_state == WeaponState_StagedReloading ? def->staged_reload_time : def->reload_time;
+		return ( float( ammo ) + Unlerp01( u16( 0 ), ps->weapon_state_time, t ) ) / float( def->clip_size );
+	}
+
+	return Min2( 1.0f, float( ps->weapon_state_time ) / float( def->reload_time ) );
 }
 
 static Vec4 AmmoColor( float ammo_frac ) {
@@ -1351,7 +1337,7 @@ static bool CG_LFuncDrawWeaponIcons( cg_layoutnode_t *argumentnode ) {
 }
 
 static bool CG_LFuncDrawCrossHair( cg_layoutnode_t *argumentnode ) {
-	CG_DrawCrosshair();
+	CG_DrawCrosshair( frame_static.viewport_width / 2, frame_static.viewport_height / 2 );
 	return true;
 }
 

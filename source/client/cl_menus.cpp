@@ -58,7 +58,7 @@ static MainMenuState mainmenu_state;
 static GameMenuState gamemenu_state;
 static DemoMenuState demomenu_state;
 
-static int selected_server;
+static size_t selected_server;
 
 static bool yolodemo;
 
@@ -106,13 +106,11 @@ static void SettingLabel( const char * label ) {
 }
 
 template< size_t maxlen >
-static void CvarTextbox( const char * label, const char * cvar_name, const char * def, u32 flags ) {
+static void CvarTextbox( const char * label, const char * cvar_name ) {
 	SettingLabel( label );
 
-	Cvar * cvar = NewCvar( cvar_name, def, flags );
-
 	char buf[ maxlen + 1 ];
-	Q_strncpyz( buf, cvar->value, sizeof( buf ) );
+	Q_strncpyz( buf, Cvar_String( cvar_name ), sizeof( buf ) );
 
 	ImGui::PushID( cvar_name );
 	ImGui::InputText( "", buf, sizeof( buf ) );
@@ -121,12 +119,10 @@ static void CvarTextbox( const char * label, const char * cvar_name, const char 
 	Cvar_Set( cvar_name, buf );
 }
 
-static void CvarCheckbox( const char * label, const char * cvar_name, const char * def, u32 flags ) {
+static void CvarCheckbox( const char * label, const char * cvar_name ) {
 	SettingLabel( label );
 
-	Cvar * cvar = NewCvar( cvar_name, def, flags );
-
-	bool val = cvar->integer != 0;
+	bool val = Cvar_Bool( cvar_name );
 	ImGui::PushID( cvar_name );
 	ImGui::Checkbox( "", &val );
 	ImGui::PopID();
@@ -134,14 +130,26 @@ static void CvarCheckbox( const char * label, const char * cvar_name, const char
 	Cvar_Set( cvar_name, val ? "1" : "0" );
 }
 
-static void CvarSliderFloat( const char * label, const char * cvar_name, float lo, float hi, const char * def, u32 flags ) {
+static void CvarSliderInt( const char * label, const char * cvar_name, int lo, int hi ) {
 	TempAllocator temp = cls.frame_arena.temp();
 
 	SettingLabel( label );
 
-	Cvar * cvar = NewCvar( cvar_name, def, flags );
+	int val = Cvar_Integer( cvar_name );
+	ImGui::PushID( cvar_name );
+	ImGui::SliderInt( "", &val, lo, hi, NULL );
+	ImGui::PopID();
 
-	float val = cvar->number;
+	char * buf = temp( "{}", val );
+	Cvar_Set( cvar_name, buf );
+}
+
+static void CvarSliderFloat( const char * label, const char * cvar_name, float lo, float hi ) {
+	TempAllocator temp = cls.frame_arena.temp();
+
+	SettingLabel( label );
+
+	float val = Cvar_Float( cvar_name );
 	ImGui::PushID( cvar_name );
 	ImGui::SliderFloat( "", &val, lo, hi, "%.2f" );
 	ImGui::PopID();
@@ -211,12 +219,16 @@ static const char * SelectableMapList() {
 static void SettingsGeneral() {
 	TempAllocator temp = cls.frame_arena.temp();
 
-	CvarTextbox< MAX_NAME_CHARS >( "Name", "name", "", CvarFlag_UserInfo | CvarFlag_Archive );
+	CvarTextbox< MAX_NAME_CHARS >( "Name", "name" );
 
-	CvarCheckbox( "Show chat", "cg_chat", "1", CvarFlag_Archive );
-	CvarCheckbox( "Show hotkeys", "cg_showHotkeys", "1", CvarFlag_Archive );
-	CvarCheckbox( "Show FPS", "cg_showFPS", "0", CvarFlag_Archive );
-	CvarCheckbox( "Show speed", "cg_showSpeed", "0", CvarFlag_Archive );
+	CvarSliderInt( "Crosshair size", "cg_crosshair_size", 1, 50 );
+	CvarSliderInt( "Crosshair gap", "cg_crosshair_gap", 0, 50 );
+
+
+	CvarCheckbox( "Show chat", "cg_chat" );
+	CvarCheckbox( "Show hotkeys", "cg_showHotkeys" );
+	CvarCheckbox( "Show FPS", "cg_showFPS" );
+	CvarCheckbox( "Show speed", "cg_showSpeed" );
 }
 
 static void SettingsControls() {
@@ -264,10 +276,10 @@ static void SettingsControls() {
 		}
 
 		if( ImGui::BeginTabItem( "Mouse" ) ) {
-			CvarSliderFloat( "Sensitivity", "sensitivity", sensivity_range[ 0 ], sensivity_range[ 1 ], "3", CvarFlag_Archive );
-			CvarSliderFloat( "Horizontal sensitivity", "horizontalsensscale", 0.5f, 2.0f, "1", CvarFlag_Archive );
-			CvarSliderFloat( "Acceleration", "m_accel", 0.0f, 1.0f, "0", CvarFlag_Archive );
-			CvarCheckbox( "Invert Y axis", "m_invertY", "0", CvarFlag_Archive );
+			CvarSliderFloat( "Sensitivity", "sensitivity", sensivity_range[ 0 ], sensivity_range[ 1 ] );
+			CvarSliderFloat( "Horizontal sensitivity", "horizontalsensscale", 0.5f, 2.0f );
+			CvarSliderFloat( "Acceleration", "m_accel", 0.0f, 1.0f );
+			CvarCheckbox( "Invert Y axis", "m_invertY" );
 
 			ImGui::EndTabItem();
 		}
@@ -423,8 +435,7 @@ static void SettingsVideo() {
 	{
 		SettingLabel( "Anti-aliasing" );
 
-		Cvar * cvar = NewCvar( "r_samples", "0", CvarFlag_Archive );
-		int samples = cvar->integer;
+		int samples = Cvar_Integer( "r_samples" );
 
 		ImGui::PushItemWidth( 100 );
 		if( ImGui::BeginCombo( "##r_samples", samples == 0 ? "Off" : temp( "{}x", samples ) ) ) {
@@ -455,8 +466,7 @@ static void SettingsVideo() {
 	{
 		SettingLabel( "Shadow Quality" );
 
-		Cvar * cvar = NewCvar( "r_shadow_quality", "1", CvarFlag_Archive );
-		ShadowQuality quality = ShadowQuality( cvar->integer );
+		ShadowQuality quality = ShadowQuality( Cvar_Integer( "r_shadow_quality" ) );
 
 		ImGui::PushItemWidth( 150 );
 		if( ImGui::BeginCombo( "##r_shadow_quality", ShadowQualityToString( quality ) ) ) {
@@ -478,8 +488,7 @@ static void SettingsVideo() {
 
 		constexpr int values[] = { 60, 75, 120, 144, 165, 180, 200, 240, 333, 500, 1000 };
 
-		Cvar * cvar = NewCvar( "cl_maxfps", "250", CvarFlag_Archive );
-		int maxfps = cvar->integer;
+		int maxfps = Cvar_Integer( "cl_maxfps" );
 
 		ImGui::PushItemWidth( 100 );
 		if( ImGui::BeginCombo( "##cl_maxfps", temp( "{}", maxfps ) ) ) {
@@ -497,9 +506,9 @@ static void SettingsVideo() {
 		Cvar_Set( "cl_maxfps", temp( "{}", maxfps ) );
 	}
 
-	CvarCheckbox( "Vsync", "vid_vsync", "0", CvarFlag_Archive );
+	CvarCheckbox( "Vsync", "vid_vsync" );
 
-	CvarCheckbox( "Colorblind mode", "cg_colorBlind", "0", CvarFlag_Archive );
+	CvarCheckbox( "Colorblind mode", "cg_colorBlind" );
 }
 
 static const char * CleanAudioDeviceName( const char * name ) {
@@ -536,9 +545,9 @@ static void SettingsAudio() {
 
 	ImGui::Separator();
 
-	CvarSliderFloat( "Master volume", "s_volume", 0.0f, 1.0f, "1", CvarFlag_Archive );
-	CvarSliderFloat( "Music volume", "s_musicvolume", 0.0f, 1.0f, "1", CvarFlag_Archive );
-	CvarCheckbox( "Mute when alt-tabbed", "s_muteinbackground", "1", CvarFlag_Archive );
+	CvarSliderFloat( "Master volume", "s_volume", 0.0f, 1.0f );
+	CvarSliderFloat( "Music volume", "s_musicvolume", 0.0f, 1.0f );
+	CvarCheckbox( "Mute when alt-tabbed", "s_muteinbackground" );
 }
 
 static void Settings() {
@@ -591,7 +600,7 @@ static void ServerBrowser() {
 	}
 	ImGui::AlignTextToFramePadding();
 	ImGui::SameLine(); ImGui::Text( "Search");
-	ImGui::SameLine(); ImGui::InputText( "", server_filter, sizeof( server_filter ) );
+	ImGui::SameLine(); ImGui::InputText( "##server_filter", server_filter, sizeof( server_filter ) );
 
 	ImGui::BeginChild( "servers" );
 	ImGui::Columns( 4, "serverbrowser", false );
@@ -685,7 +694,7 @@ static void DemoBrowser() {
 static void CreateServer() {
 	TempAllocator temp = cls.frame_arena.temp();
 
-	CvarTextbox< 128 >( "Server name", "sv_hostname", APPLICATION " server", CvarFlag_ServerInfo | CvarFlag_Archive );
+	CvarTextbox< 128 >( "Server name", "sv_hostname" );
 
 	{
 		int maxclients = Cvar_Integer( "sv_maxclients" );
@@ -705,7 +714,7 @@ static void CreateServer() {
 
 	const char * map_name = SelectableMapList();
 
-	CvarCheckbox( "Public", "sv_public", "0", CvarFlag_ServerReadOnly );
+	CvarCheckbox( "Public", "sv_public" );
 
 	if( ImGui::Button( "Create server" ) ) {
 		Cbuf_Add( "map \"{}\"", map_name );
@@ -741,7 +750,7 @@ static void MainMenu() {
 	ImGui::SetCursorPosX( 40.0f * triangel( cls.monotonicTime, 631 ) );
 	ImGui::PushFont( cls.large_font );
 
-	if( NewCvar( "cg_colorBlind", "0", CvarFlag_Archive )->integer ) {
+	if( Cvar_Bool( "cg_colorBlind" ) ) {
 		ImGui::PushStyleColor( ImGuiCol_Text, CG_TeamColorVec4( TEAM_BETA ) );
 		if( glitch( cls.monotonicTime / 8 ) )
 			ImGui::Text( "COLOURBLIN" );
@@ -756,7 +765,8 @@ static void MainMenu() {
 		ImGui::PushStyleColor( ImGuiCol_Text, CG_TeamColorVec4( TEAM_ALPHA ) );
 		ImGui::Text( "IESEL" );
 		ImGui::PopStyleColor();
-	} else {
+	}
+	else {
 		ImGui::PushStyleColor( ImGuiCol_Text, glitch( cls.monotonicTime ) ? IM_COL32( 255, 255, 255, 255 ) : IM_COL32( 32, 182, 252, 255 ) );
 		ImGui::Text( "VACCAINE PFIZEL" );
 		ImGui::PopStyleColor();
@@ -1186,6 +1196,12 @@ static void DemoMenu() {
 		ImGui::NextColumn();
 		GameMenuButton( "+15s", "demojump +15", NULL, 1 );
 		ImGui::NextColumn();
+		if( Cvar_Bool( "cg_draw2D" ) ) {
+			GameMenuButton( "Show HUD", "cg_draw2D 1", NULL, 1 );
+		} else {
+			GameMenuButton( "Hide HUD", "cg_draw2D 0", NULL, 1 );
+		}
+
 
 		ImGui::Columns( 1, NULL, false );
 

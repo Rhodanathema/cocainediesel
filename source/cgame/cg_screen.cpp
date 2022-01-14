@@ -22,21 +22,30 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "client/renderer/renderer.h"
 #include "client/renderer/text.h"
 
-Cvar *cg_centerTime;
-Cvar *cg_showFPS;
 Cvar *cg_showPointedPlayer;
 Cvar *cg_draw2D;
 
 Cvar *cg_crosshair_size;
+Cvar *cg_crosshair_gap;
 
-Cvar *cg_showSpeed;
+static constexpr float playerNamesAlpha = 0.4f;
+static constexpr float playerNamesZfar = 1024.0f;
+static constexpr float playerNamesZclose = 112.0f;
+static constexpr float playerNamesZgrow = 2.5f;
 
-Cvar *cg_showPlayerNames;
-Cvar *cg_showPlayerNames_alpha;
-Cvar *cg_showPlayerNames_zfar;
-Cvar *cg_showPlayerNames_barWidth;
+static constexpr int64_t crosshairDamageTime = 200;
+static constexpr int crosshairFireGap = 6;
+static constexpr float crosshairFireSizeRatio = 1.5f;
+static constexpr float crosshairRefireGapRatio = 0.01f;
+static constexpr float crosshairRefireTimeRatio = 1.5f;
 
 static int64_t scr_damagetime = 0;
+static int64_t scr_shoottime = 0;
+static int64_t scr_shoottimebasis = 0;
+
+static constexpr int maxCrosshairSize = 50;
+static constexpr int maxCrosshairGapSize = 50;
+
 
 /*
 ===============================================================================
@@ -46,6 +55,7 @@ CENTER PRINTING
 ===============================================================================
 */
 
+static constexpr int centerTimeOff = 2500;
 static char scr_centerstring[1024];
 static int scr_centertime_off;
 
@@ -57,7 +67,7 @@ static int scr_centertime_off;
 */
 void CG_CenterPrint( const char *str ) {
 	Q_strncpyz( scr_centerstring, str, sizeof( scr_centerstring ) );
-	scr_centertime_off = cg_centerTime->number * 1000.0f;
+	scr_centertime_off = centerTimeOff;
 }
 
 static void CG_DrawCenterString() {
@@ -67,19 +77,10 @@ static void CG_DrawCenterString() {
 //============================================================================
 
 void CG_ScreenInit() {
-	cg_showFPS =        NewCvar( "cg_showFPS", "0", CvarFlag_Archive );
 	cg_draw2D =     NewCvar( "cg_draw2D", "1", 0 );
-	cg_centerTime =     NewCvar( "cg_centerTime", "2.5", 0 );
 
 	cg_crosshair_size = NewCvar( "cg_crosshair_size", "3", CvarFlag_Archive );
-
-	cg_showSpeed =      NewCvar( "cg_showSpeed", "0", CvarFlag_Archive );
-	cg_showPointedPlayer =  NewCvar( "cg_showPointedPlayer", "1", CvarFlag_Archive );
-
-	cg_showPlayerNames =        NewCvar( "cg_showPlayerNames", "2", CvarFlag_Archive );
-	cg_showPlayerNames_alpha =  NewCvar( "cg_showPlayerNames_alpha", "0.4", CvarFlag_Archive );
-	cg_showPlayerNames_zfar =   NewCvar( "cg_showPlayerNames_zfar", "1024", CvarFlag_Archive );
-	cg_showPlayerNames_barWidth =   NewCvar( "cg_showPlayerNames_barWidth", "8", CvarFlag_Archive );
+	cg_crosshair_gap = NewCvar( "cg_crosshair_gap", "0", CvarFlag_Archive );
 }
 
 void CG_DrawNet( int x, int y, int w, int h, Alignment alignment, Vec4 color ) {
@@ -101,11 +102,16 @@ void CG_ScreenCrosshairDamageUpdate() {
 	scr_damagetime = cls.monotonicTime;
 }
 
+void CG_ScreenCrosshairShootUpdate( u16 refire_time ) {
+	scr_shoottime = cls.monotonicTime + refire_time * crosshairRefireTimeRatio + Max2( int64_t( 0 ), scr_shoottime - cls.monotonicTime );
+	scr_shoottimebasis = refire_time;
+}
+
 static void CG_FillRect( int x, int y, int w, int h, Vec4 color ) {
 	Draw2DBox( x, y, w, h, cls.white_material, color );
 }
 
-void CG_DrawCrosshair() {
+void CG_DrawCrosshair( int x, int y ) {
 	if( cg.predictedPlayerState.health <= 0 )
 		return;
 
@@ -115,16 +121,29 @@ void CG_DrawCrosshair() {
 	if( weapon == Weapon_AutoSniper && cg.predictedPlayerState.zoom_time > 0 )
 		return;
 
-	Vec4 color = cls.monotonicTime - scr_damagetime <= 300 ? vec4_red : vec4_white;
+	Vec4 color = cls.monotonicTime - scr_damagetime <= crosshairDamageTime ? vec4_red : vec4_white; 
 
-	int w = frame_static.viewport_width;
-	int h = frame_static.viewport_height;
-	int size = cg_crosshair_size->integer > 0 ? cg_crosshair_size->integer : 0;
+	int size = Clamp( 1, cg_crosshair_size->integer, maxCrosshairSize );
+	int gap = Clamp( 0, cg_crosshair_gap->integer, maxCrosshairGapSize );
+	float diff = (float)( scr_shoottime - cls.monotonicTime )/scr_shoottimebasis;
+	if( scr_shoottime > cls.monotonicTime ) {
+		gap += diff * ( crosshairFireGap + scr_shoottimebasis * crosshairRefireGapRatio );
+		size += diff * crosshairFireSizeRatio;
+	}
 
-	CG_FillRect( w / 2 - 2, h / 2 - 2 - size, 4, 4 + 2 * size, vec4_black );
-	CG_FillRect( w / 2 - 2 - size, h / 2 - 2, 4 + 2 * size, 4, vec4_black );
-	CG_FillRect( w / 2 - 1, h / 2 - 1 - size, 2, 2 + 2 * size, color );
-	CG_FillRect( w / 2 - 1 - size, h / 2 - 1, 2 + 2 * size, 2, color );
+	CG_FillRect( x - 2, y - 2 - size - gap, 4, 4 + size, vec4_black );
+	CG_FillRect( x - 2, y - 2 + gap, 4, 4 + size, vec4_black );
+
+	CG_FillRect( x - 2 - size - gap, y - 2, 4 + size, 4, vec4_black );
+	CG_FillRect( x - 2 + gap, y - 2, 4 + size, 4, vec4_black );
+
+
+	CG_FillRect( x - 1, y - 1 - gap - size, 2, 2 + size, color );
+	CG_FillRect( x - 1, y - 1 + gap, 2, 2 + size, color );
+
+	CG_FillRect( x - 1 - size - gap, y - 1, 2 + size, 2, color );
+	CG_FillRect( x - 1 + gap, y - 1, 2 + size, 2, color );
+
 }
 
 void CG_DrawClock( int x, int y, Alignment alignment, const Font * font, float font_size, Vec4 color, bool border ) {
@@ -171,44 +190,8 @@ void CG_DrawClock( int x, int y, Alignment alignment, const Font * font, float f
 	DrawText( font, font_size, string, alignment, x, y, color, border );
 }
 
-void CG_ClearPointedNum() {
-	cg.pointedNum = 0;
-	cg.pointRemoveTime = 0;
-	cg.pointedHealth = 0;
-}
-
-static void CG_UpdatePointedNum() {
-	// disable cases
-	if( cg.view.thirdperson || cg.view.type != VIEWDEF_PLAYERVIEW || !cg_showPointedPlayer->integer ) {
-		CG_ClearPointedNum();
-		return;
-	}
-
-	if( cg.predictedPlayerState.pointed_player ) {
-		cg.pointedNum = cg.predictedPlayerState.pointed_player;
-		cg.pointRemoveTime = cl.serverTime + 150;
-		cg.pointedHealth = cg.predictedPlayerState.pointed_health;
-	}
-
-	if( cg.pointRemoveTime <= cl.serverTime ) {
-		CG_ClearPointedNum();
-	}
-
-	if( cg.pointedNum ) {
-		if( cg_entities[cg.pointedNum].current.team != cg.predictedPlayerState.team ) {
-			CG_ClearPointedNum();
-		}
-	}
-}
-
 void CG_DrawPlayerNames( const Font * font, float font_size, Vec4 color, bool border ) {
 	// static vec4_t alphagreen = { 0, 1, 0, 0 }, alphared = { 1, 0, 0, 0 }, alphayellow = { 1, 1, 0, 0 }, alphamagenta = { 1, 0, 1, 1 }, alphagrey = { 0.85, 0.85, 0.85, 1 };
-	if( !cg_showPlayerNames->integer && !cg_showPointedPlayer->integer ) {
-		return;
-	}
-
-	CG_UpdatePointedNum();
-
 	for( int i = 0; i < client_gs.maxclients; i++ ) {
 		if( strlen( PlayerName( i ) ) == 0 || ISVIEWERENTITY( i + 1 ) ) {
 			continue;
@@ -219,12 +202,8 @@ void CG_DrawPlayerNames( const Font * font, float font_size, Vec4 color, bool bo
 			continue;
 		}
 
-		// only show the pointed player
-		if( !cg_showPlayerNames->integer && ( cent->current.number != cg.pointedNum ) ) {
-			continue;
-		}
-
-		if( cg_showPlayerNames->integer == 2 && cent->current.team != cg.predictedPlayerState.team ) {
+		//only show the players in your team
+		if( cent->current.team != cg.predictedPlayerState.team ) {
 			continue;
 		}
 
@@ -245,13 +224,13 @@ void CG_DrawPlayerNames( const Font * font, float font_size, Vec4 color, bool bo
 
 		float fadeFrac;
 		if( cent->current.number != cg.pointedNum ) {
-			if( dist > cg_showPlayerNames_zfar->number ) {
+			if( dist > playerNamesZfar ) {
 				continue;
 			}
 
-			fadeFrac = Clamp01( ( cg_showPlayerNames_zfar->number - dist ) / ( cg_showPlayerNames_zfar->number * 0.25f ) );
+			fadeFrac = Clamp01( Min2( ( playerNamesZfar - dist ) / ( playerNamesZfar * 0.25f ), ( dist - playerNamesZclose ) / playerNamesZclose ) );
 
-			tmpcolor.w = cg_showPlayerNames_alpha->number * color.w * fadeFrac;
+			tmpcolor.w = playerNamesAlpha * color.w * fadeFrac;
 		} else {
 			fadeFrac = Clamp01( ( cg.pointRemoveTime - cl.serverTime ) / 150.0f );
 
@@ -275,7 +254,8 @@ void CG_DrawPlayerNames( const Font * font, float font_size, Vec4 color, bool bo
 			continue;
 		}
 
-		DrawText( font, font_size, PlayerName( i ), Alignment_CenterBottom, coords.x, coords.y, tmpcolor, border );
+		float size = font_size * playerNamesZgrow * ( 1.0f - ( dist / ( playerNamesZfar * 1.8f ) ) );
+		DrawText( font, size, PlayerName( i ), Alignment_CenterBottom, coords.x, coords.y, tmpcolor, border );
 	}
 }
 
@@ -577,7 +557,7 @@ void CG_Draw2DView() {
 void CG_Draw2D() {
 	CG_DrawScope();
 
-	if( !cg_draw2D->integer ) {
+	if( !cg_draw2D->integer && cgs.demoPlaying ) {
 		return;
 	}
 

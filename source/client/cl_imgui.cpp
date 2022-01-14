@@ -3,7 +3,6 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_internal.h"
-#include "imgui/imgui_freetype.h"
 
 #include "qcommon/base.h"
 #include "qcommon/string.h"
@@ -69,7 +68,7 @@ void CL_InitImGui() {
 		cls.medium_font = AddFontAsset( "fonts/Decalotype-Black.ttf", 28.0f );
 		cls.console_font = AddFontAsset( "fonts/Decalotype-Bold.ttf", 14.0f );
 
-		ImGuiFreeType::BuildFontAtlas( io.Fonts );
+		io.Fonts->Build();
 
 		u8 * pixels;
 		int width, height;
@@ -157,15 +156,16 @@ static void SubmitDrawCalls() {
 
 		const ImDrawList * cmd_list = draw_data->CmdLists[ n ];
 
-		if( cmd_list->VtxBuffer.Size == 0 || cmd_list->IdxBuffer.Size == 0 ) {
-			// TODO: this is a hack to separate drawcalls into 2 passes
-			if( cmd_list->CmdBuffer.Size > 0 ) {
-				const ImDrawCmd * cmd = &cmd_list->CmdBuffer[ 0 ];
-				u32 new_pass = u32( uintptr_t( cmd->UserCallbackData ) );
-				if( new_pass != 0 ) {
-					pass = new_pass;
-				}
+		// TODO: this is a hack to separate drawcalls into 2 passes
+		if( cmd_list->CmdBuffer.Size > 0 ) {
+			const ImDrawCmd * cmd = &cmd_list->CmdBuffer[ 0 ];
+			u32 new_pass = u32( uintptr_t( cmd->UserCallbackData ) );
+			if( new_pass != 0 ) {
+				pass = new_pass;
 			}
+		}
+
+		if( cmd_list->VtxBuffer.Size == 0 || cmd_list->IdxBuffer.Size == 0 ) {
 			continue;
 		}
 

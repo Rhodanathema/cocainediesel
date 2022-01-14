@@ -129,8 +129,7 @@ void G_Init( unsigned int framemsec ) {
 
 	sv_cheats = NewCvar( "sv_cheats", is_public_build ? "0" : "1", CvarFlag_ServerReadOnly );
 
-	sv_password = NewCvar( "sv_password", "", CvarFlag_UserInfo );
-	sv_password->modified = true; // force an update of g_needpass in G_UpdateServerInfo
+	sv_password = NewCvar( "sv_password", "", 0 );
 	g_operator_password = NewCvar( "g_operator_password", "", CvarFlag_Archive );
 	filterban = NewCvar( "filterban", "1", 0 );
 
@@ -159,7 +158,6 @@ void G_Init( unsigned int framemsec ) {
 	g_inactivity_maxtime->modified = true;
 
 	// helper cvars to show current status in serverinfo reply
-	NewCvar( "g_match_score", "", CvarFlag_ServerInfo | CvarFlag_ReadOnly );
 	NewCvar( "g_needpass", "", CvarFlag_ServerInfo | CvarFlag_ReadOnly );
 
 	game.maxentities = MAX_EDICTS;

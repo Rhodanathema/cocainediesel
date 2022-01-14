@@ -167,6 +167,8 @@ static void CG_FireWeaponEvent( int entNum, WeaponType weapon ) {
 		S_StartEntitySound( sfx, entNum, CHAN_AUTO, 1.0f, 1.0f );
 	}
 
+	CG_ScreenCrosshairShootUpdate( GS_GetWeaponDef( weapon )->refire_time );
+
 	// add animation to the player model
 	switch( weapon ) {
 		case Weapon_Knife:
@@ -418,7 +420,7 @@ void CG_Event_Fall( const SyncEntityState * state, u64 parm ) {
 }
 
 static void CG_Event_Pain( SyncEntityState * state, u64 parm ) {
-	constexpr PlayerSound sounds[] = { PlayerSound_Pain25, PlayerSound_Pain50, PlayerSound_Pain75, PlayerSound_Pain100 };
+	static constexpr PlayerSound sounds[] = { PlayerSound_Pain25, PlayerSound_Pain50, PlayerSound_Pain75, PlayerSound_Pain100 };
 	if( parm >= ARRAY_COUNT( sounds ) )
 		return;
 

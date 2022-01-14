@@ -279,8 +279,6 @@ void G_ClearCenterPrint( edict_t *ent );
 
 void G_DebugPrint( const char * format, ... );
 
-void G_Obituary( edict_t *victim, edict_t *attacker, int topAssistEntNo, DamageType mod, bool wallbang );
-
 edict_t *G_Sound( edict_t *owner, int channel, StringHash sound );
 edict_t *G_PositionedSound( Vec3 origin, int channel, StringHash sound );
 void G_GlobalSound( int channel, StringHash sound );
@@ -370,7 +368,7 @@ bool G_IsTeamDamage( SyncEntityState *targ, SyncEntityState *attacker );
 void G_Killed( edict_t *targ, edict_t *inflictor, edict_t *attacker, int topAssistorNo, DamageType damage_type, int damage );
 void G_SplashFrac( const SyncEntityState *s, const entity_shared_t *r, Vec3 point, float maxradius, Vec3 * pushdir, float *frac, bool selfdamage );
 void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, Vec3 pushdir, Vec3 dmgdir, Vec3 point, float damage, float knockback, int dflags, DamageType damage_type );
-void SpawnDamageEvents( const edict_t * attacker, edict_t * victim, float damage, bool headshot, Vec3 pos, Vec3 dir );
+void SpawnDamageEvents( const edict_t * attacker, edict_t * victim, float damage, bool headshot, Vec3 pos, Vec3 dir, bool showNumbers );
 void G_RadiusKnockback( const WeaponDef * def, edict_t *attacker, Vec3 pos, Plane *plane, DamageType damage_type, int timeDelta );
 void G_RadiusDamage( edict_t *inflictor, edict_t *attacker, Plane *plane, edict_t *ignore, DamageType damage_type );
 

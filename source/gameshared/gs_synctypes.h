@@ -288,12 +288,10 @@ struct pmove_state_t {
 	s16 knockback_time;
 	s16 crouch_time;
 	s16 tbag_time;
-	s16 dash_time;
-	s16 walljump_time;
+	s16 special_time;
+	s16 special_count;
 
 	s16 max_speed;
-	s16 jump_speed;
-	s16 dash_speed;
 };
 
 struct WeaponSlot {

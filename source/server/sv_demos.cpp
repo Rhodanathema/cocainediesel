@@ -271,7 +271,7 @@ void SV_Demo_Purge_f() {
 		}
 	}
 
-	int keep = g_autorecord_maxdemos->integer;
+	size_t keep = g_autorecord_maxdemos->integer;
 	if( keep >= auto_demos.size() ) {
 		return;
 	}
@@ -338,5 +338,5 @@ void SV_DemoGetUrl_f( edict_t * ent ) {
 }
 
 bool SV_IsDemoDownloadRequest( const char * request ) {
-	return StartsWith( request, SV_DEMO_DIR ) && FileExtension( request ) == APP_DEMO_EXTENSION_STR;
+	return StartsWith( request, SV_DEMO_DIR ) && EndsWith( request, APP_DEMO_EXTENSION_STR );
 }

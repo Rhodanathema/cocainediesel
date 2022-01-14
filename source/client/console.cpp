@@ -67,7 +67,7 @@ void Con_ToggleConsole() {
 	}
 	else {
 		CL_SetOldKeyDest( cls.key_dest );
-		CL_SetKeyDest( key_console );
+		CL_SetKeyDest( key_ImGui );
 	}
 
 	Con_ClearInput();
@@ -87,13 +87,7 @@ void Con_Close() {
 	}
 }
 
-void Con_Print( const char * str ) {
-	if( console.log_mutex == NULL )
-		return;
-
-	Lock( console.log_mutex );
-	defer { Unlock( console.log_mutex ); };
-
+static void MakeSpaceAndPrint( const char * str ) {
 	// delete lines until we have enough space to add str
 	size_t len = strlen( str );
 	size_t trim = 0;
@@ -108,8 +102,18 @@ void Con_Print( const char * str ) {
 	}
 
 	console.log.remove( 0, trim );
-	console.log += S_COLOR_WHITE;
 	console.log.append_raw( str, len );
+}
+
+void Con_Print( const char * str ) {
+	if( console.log_mutex == NULL )
+		return;
+
+	Lock( console.log_mutex );
+	defer { Unlock( console.log_mutex ); };
+
+	MakeSpaceAndPrint( S_COLOR_WHITE );
+	MakeSpaceAndPrint( str );
 
 	if( console.at_bottom ) {
 		console.scroll_to_bottom = true;
@@ -346,15 +350,15 @@ void Con_Draw() {
 		input_flags |= ImGuiInputTextFlags_EnterReturnsTrue;
 
 		ImGui::PushItemWidth( ImGui::GetWindowWidth() );
-		ImGui::SetKeyboardFocusHere();
-		bool enter = ImGui::InputText( "##consoleinput", console.input, sizeof( console.input ), input_flags, InputCallback );
-		// can't drag the scrollbar without this
+		// don't steal focus if the user is dragging the scrollbar
 		if( !ImGui::IsAnyItemActive() )
 			ImGui::SetKeyboardFocusHere();
+		bool enter = ImGui::InputText( "##consoleinput", console.input, sizeof( console.input ), input_flags, InputCallback );
 		ImGui::PopItemWidth();
 
 		if( enter ) {
 			Con_Execute();
+			console.scroll_to_bottom = true;
 		}
 
 		ImVec2 top_left = ImGui::GetCursorPos();

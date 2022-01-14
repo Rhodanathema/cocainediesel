@@ -298,16 +298,15 @@ void CG_CenterPrint( const char *str );
 
 void CG_EscapeKey();
 
-void CG_DrawCrosshair();
+void CG_DrawCrosshair( int x, int y );
 void CG_ScreenCrosshairDamageUpdate();
+void CG_ScreenCrosshairShootUpdate( u16 refire_time );
 
 void CG_DrawKeyState( int x, int y, int w, int h, const char *key );
 
 void CG_DrawClock( int x, int y, Alignment alignment, const Font * font, float font_size, Vec4 color, bool border );
 void CG_DrawPlayerNames( const Font * font, float font_size, Vec4 color, bool border );
 void CG_DrawNet( int x, int y, int w, int h, Alignment alignment, Vec4 color );
-
-void CG_ClearPointedNum();
 
 void CG_InitDamageNumbers();
 void CG_AddDamageNumber( SyncEntityState * ent, u64 parm );
@@ -342,9 +341,6 @@ bool CG_ScoreboardShown();
 //
 extern Cvar *developer;
 extern Cvar *cg_showClamp;
-extern Cvar *cg_showHotkeys;
-extern Cvar *cg_colorBlind;
-extern Cvar *cg_voicePitch;
 
 // wsw
 extern Cvar *cg_autoaction_demo;
@@ -352,7 +348,6 @@ extern Cvar *cg_autoaction_screenshot;
 extern Cvar *cg_autoaction_spectator;
 
 extern Cvar *cg_projectileAntilagOffset;
-extern Cvar *cg_chat;
 
 extern Cvar *cg_particleDebug;
 
@@ -472,7 +467,6 @@ void CG_InitInput();
 void CG_ShutdownInput();
 void CG_ClearInputState();
 void CG_MouseMove( int frameTime, Vec2 m );
-float CG_GetSensitivityScale( float sens, float zoomSens );
 u8 CG_GetButtonBits();
 u8 CG_GetButtonDownEdges();
 Vec3 CG_GetDeltaViewAngles();

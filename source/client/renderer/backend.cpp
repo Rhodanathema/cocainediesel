@@ -239,6 +239,7 @@ static u32 GLTypeSize( GLenum type ) {
 	}
 
 	assert( false );
+	return 0;
 }
 
 static void VertexFormatToGL( VertexFormat format, GLenum * type, int * num_components, bool * integral, GLboolean * normalized, u32 * stride ) {
@@ -501,7 +502,7 @@ static void DSAHacks() {
 	}
 }
 
-static StreamingBuffer NewStreamingBuffer( u32 len, bool ubo );
+static StreamingBuffer NewStreamingBuffer( u32 len, const char * name, bool ubo );
 
 void InitRenderBackend() {
 	ZoneScoped;
@@ -587,8 +588,9 @@ void InitRenderBackend() {
 	glGetIntegerv( GL_MAX_UNIFORM_BLOCK_SIZE, &max_ubo_size );
 	assert( max_ubo_size >= s32( UNIFORM_BUFFER_SIZE ) );
 
-	for( UBO & ubo : ubos ) {
-		ubo.stream = NewStreamingBuffer( UNIFORM_BUFFER_SIZE, true );
+	for( size_t i = 0; i < ARRAY_COUNT( ubos ); i++ ) {
+		TempAllocator temp = cls.frame_arena.temp();
+		ubos[ i ].stream = NewStreamingBuffer( UNIFORM_BUFFER_SIZE, temp( "UBO {}", i ), true );
 	}
 
 	in_frame = false;
@@ -1231,23 +1233,39 @@ void DeferDeleteGPUBuffer( GPUBuffer buf ) {
 	deferred_buffer_deletes.add( buf );
 }
 
-static StreamingBuffer NewStreamingBuffer( u32 len, bool ubo ) {
+static StreamingBuffer NewStreamingBuffer( u32 len, const char * name, bool ubo ) {
 	StreamingBuffer stream = { };
+
+	if( name != NULL ) {
+		stream.name = MakeSpan( CopyString( sys_allocator, name ) );
+	}
+
 	for( size_t i = 0; i < ARRAY_COUNT( stream.buffers ); i++ ) {
 		GLbitfield flags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
 		stream.buffers[ i ].buffer = DSACreateBuffer( ubo );
 		glNamedBufferStorage( stream.buffers[ i ].buffer, len, NULL, flags );
+
+		if( name != NULL ) {
+			TempAllocator temp = cls.frame_arena.temp();
+			DebugLabel( GL_BUFFER, stream.buffers[ i ].buffer, temp( "{} #{}", name, i ) );
+		}
+
 		stream.mappings[ i ] = ( u8 * ) glMapNamedBufferRange( stream.buffers[ i ].buffer, 0, len, flags );
 	}
 
 	return stream;
 }
 
-StreamingBuffer NewStreamingBuffer( u32 len ) {
-	return NewStreamingBuffer( len, false );
+StreamingBuffer NewStreamingBuffer( u32 len, const char * name ) {
+	return NewStreamingBuffer( len, name, false );
 }
 
 void StreamingBufferFrame( StreamingBuffer * stream ) {
+	ZoneScoped;
+	if( stream->name.ptr != NULL ) {
+		ZoneText( stream->name.ptr, stream->name.n );
+	}
+
 	stream->fences[ stream->current ] = bit_cast< u64 >( glFenceSync( GL_SYNC_GPU_COMMANDS_COMPLETE, 0 ) );
 	stream->current = ( stream->current + 1 ) % ARRAY_COUNT( stream->buffers );
 
@@ -1278,6 +1296,8 @@ void DeleteStreamingBuffer( StreamingBuffer stream ) {
 			glDeleteSync( bit_cast< GLsync >( fence ) );
 		}
 	}
+
+	FREE( sys_allocator, stream.name.ptr );
 }
 
 static Texture NewTextureSamples( TextureConfig config, int msaa_samples ) {

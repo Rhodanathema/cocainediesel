@@ -24,13 +24,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon/string.h"
 
 static int clientVoted[MAX_CLIENTS];
-static int clientVoteChanges[MAX_CLIENTS];
+static int64_t lastclientVote[MAX_CLIENTS];
 
-Cvar *g_callvote_electpercentage;
 Cvar *g_callvote_electtime;          // in seconds
 Cvar *g_callvote_enabled;
-Cvar *g_callvote_maxchanges;
-Cvar *g_callvote_cooldowntime;
+
+static constexpr float callvoteElectPercent = 55.0f / 100.0f;
+static constexpr int callvoteCooldown = 5000;
+static constexpr int voteChangeCooldown = 500;
 
 enum {
 	VOTED_NOTHING = 0,
@@ -84,8 +85,6 @@ static void ListPlayersExcept( edict_t * ent, String< MAX_STRING_CHARS > * msg, 
 /*
 * map
 */
-
-#define MAPLIST_SEPS " ,"
 
 static void G_VoteMapExtraHelp( edict_t * ent, String< MAX_STRING_CHARS > * msg ) {
 	TempAllocator temp = svs.frame_arena.temp();
@@ -493,10 +492,6 @@ static callvotetype_t votes[] = {
 
 void G_CallVotes_ResetClient( int n ) {
 	clientVoted[n] = VOTED_NOTHING;
-	clientVoteChanges[n] = g_callvote_maxchanges->integer;
-	if( clientVoteChanges[n] < 1 ) {
-		clientVoteChanges[n] = 1;
-	}
 }
 
 static void G_CallVotes_Reset( bool vote_happened ) {
@@ -642,7 +637,7 @@ static void G_CallVotes_CheckState() {
 		}
 	}
 
-	int needvotes = int( voters * g_callvote_electpercentage->number / 100.0f ) + 1;
+	int needvotes = int( voters * callvoteElectPercent ) + 1;
 	if( yeses >= needvotes || callvoteState.vote.operatorcall ) {
 		G_PrintMsg( NULL, "Vote %s%s%s passed\n", S_COLOR_YELLOW, G_CallVotes_String( &callvoteState.vote ), S_COLOR_WHITE );
 		if( callvoteState.vote.callvote->execute != NULL ) {
@@ -696,13 +691,13 @@ void G_CallVotes_CmdVote( edict_t *ent ) {
 		return;
 	}
 
-	if( clientVoteChanges[PLAYERNUM( ent )] == 0 ) {
-		G_PrintMsg( ent, "%sYou cannot change your vote anymore\n", S_COLOR_RED );
+	if( ( svs.realtime - lastclientVote[PLAYERNUM( ent )] ) < voteChangeCooldown ) {
+		G_PrintMsg( ent, "%sYou can't vote that fast\n", S_COLOR_RED );
 		return;
 	}
 
+	lastclientVote[PLAYERNUM( ent )] = svs.realtime;
 	clientVoted[PLAYERNUM( ent )] = vote_id;
-	clientVoteChanges[PLAYERNUM( ent )]--;
 	G_CallVotes_CheckState();
 }
 
@@ -754,7 +749,7 @@ static void G_CallVote( edict_t *ent, bool isopcall ) {
 	}
 
 	if( !isopcall && ent->r.client->level.callvote_when &&
-		( ent->r.client->level.callvote_when + g_callvote_cooldowntime->integer * 1000 > svs.realtime ) ) {
+		( ent->r.client->level.callvote_when + callvoteCooldown > svs.realtime ) ) {
 		G_PrintMsg( ent, "%sYou can not call a vote right now\n", S_COLOR_RED );
 		return;
 	}
@@ -793,7 +788,6 @@ static void G_CallVote( edict_t *ent, bool isopcall ) {
 
 	//caller is assumed to vote YES
 	clientVoted[PLAYERNUM( ent )] = VOTED_YES;
-	clientVoteChanges[PLAYERNUM( ent )]--;
 
 	ent->r.client->level.callvote_when = callvoteState.timeout;
 
@@ -904,11 +898,8 @@ void G_OperatorVote_Cmd( edict_t *ent ) {
 }
 
 void G_CallVotes_Init() {
-	g_callvote_electpercentage = NewCvar( "g_vote_percent", "55", CvarFlag_Archive );
 	g_callvote_electtime = NewCvar( "g_vote_electtime", "20", CvarFlag_Archive );
 	g_callvote_enabled = NewCvar( "g_vote_allowed", "1", CvarFlag_Archive );
-	g_callvote_maxchanges = NewCvar( "g_vote_maxchanges", "3", CvarFlag_Archive );
-	g_callvote_cooldowntime = NewCvar( "g_vote_cooldowntime", "5", CvarFlag_Archive );
 
 	G_CallVotes_Reset( true );
 }

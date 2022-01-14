@@ -32,10 +32,6 @@ Cvar *cg_thirdPersonAngle;
 Cvar *cg_thirdPersonRange;
 
 Cvar *cg_projectileAntilagOffset;
-Cvar *cg_chat;
-
-Cvar *cg_showHotkeys;
-Cvar *cg_colorBlind;
 
 Cvar *cg_autoaction_demo;
 Cvar *cg_autoaction_screenshot;
@@ -107,9 +103,6 @@ static void CG_InitGameShared() {
 static void CG_RegisterVariables() {
 	cg_showMiss = NewCvar( "cg_showMiss", "0", 0 );
 
-	cg_showHotkeys = NewCvar( "cg_showHotkeys", "1", CvarFlag_Archive );
-	cg_colorBlind  = NewCvar( "cg_colorBlind", "0", CvarFlag_Archive );
-
 	cg_thirdPerson = NewCvar( "cg_thirdPerson", "0", CvarFlag_Cheat );
 	cg_thirdPersonAngle = NewCvar( "cg_thirdPersonAngle", "0", 0 );
 	cg_thirdPersonRange = NewCvar( "cg_thirdPersonRange", "90", 0 );
@@ -120,15 +113,11 @@ static void CG_RegisterVariables() {
 
 	cg_projectileAntilagOffset = NewCvar( "cg_projectileAntilagOffset", "1.0", CvarFlag_Archive );
 
-	cg_chat = NewCvar( "cg_chat", "1", CvarFlag_Archive );
-
 	cg_showClamp = NewCvar( "cg_showClamp", "0", CvarFlag_Developer );
 
 	cg_particleDebug = NewCvar( "cg_particleDebug", "0", CvarFlag_Developer );
 
 	cg_showServerDebugPrints = NewCvar( "cg_showServerDebugPrints", "0", CvarFlag_Archive );
-
-	NewCvar( "cg_loadout", "", CvarFlag_Archive | CvarFlag_UserInfo );
 }
 
 const char * PlayerName( int i ) {
@@ -155,8 +144,6 @@ void CG_Reset() {
 	CG_ClearAnnouncerEvents();
 
 	CG_ClearInputState();
-
-	CG_ClearPointedNum();
 
 	CG_InitDamageNumbers();
 	InitDecals();
