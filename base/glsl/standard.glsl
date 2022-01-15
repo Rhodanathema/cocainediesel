@@ -11,7 +11,7 @@ v2f vec2 v_TexCoord;
 
 #ifdef INSTANCED
 struct Instance {
-	mat3x4 transform;
+	mat4x3 transform;
 	Material material;
 };
 

@@ -8,7 +8,7 @@ layout( std140 ) uniform u_Silhouette {
 
 #if INSTANCED
 struct Instance {
-	mat3x4 transform;
+	mat4x3 transform;
 	vec4 color;
 };
 
