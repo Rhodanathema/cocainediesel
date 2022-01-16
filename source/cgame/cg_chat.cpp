@@ -88,7 +88,7 @@ static void SendChat() {
 		TempAllocator temp = cls.frame_arena.temp();
 
 		const char * cmd = chat.mode == ChatMode_SayTeam ? "say_team" : "say";
-		Cbuf_Add( "{} {}", cmd, chat.input );
+		Cmd_Execute( "{} {}", cmd, chat.input );
 
 		S_StartGlobalSound( "sounds/typewriter/return", CHAN_AUTO, 1.0f, 1.0f );
 	}
@@ -99,11 +99,11 @@ static void SendChat() {
 static int InputCallback( ImGuiInputTextCallbackData * data ) {
 	if( data->EventChar == ' ' ) {
 		S_StartGlobalSound( "sounds/typewriter/space", CHAN_AUTO, 1.0f, 1.0f );
-		Cbuf_Add( "typewriterspace" );
+		Cmd_Execute( "typewriterspace" );
 	}
 	else {
 		S_StartGlobalSound( "sounds/typewriter/clack", CHAN_AUTO, 1.0f, 1.0f );
-		Cbuf_Add( "typewriterclack" );
+		Cmd_Execute( "typewriterclack" );
 	}
 	return 0;
 }

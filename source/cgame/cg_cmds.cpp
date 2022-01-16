@@ -139,22 +139,22 @@ void CG_SC_AutoRecordAction( const char *action ) {
 
 	if( !Q_stricmp( action, "start" ) ) {
 		if( cg_autoaction_demo->integer && ( !spectator || cg_autoaction_spectator->integer ) ) {
-			Cbuf_ExecuteLine( "stop silent" );
-			Cbuf_ExecuteLine( temp( "record autorecord/{} silent", name ) );
+			Cmd_Execute( "stop silent" );
+			Cmd_Execute( "record autorecord/{} silent", name );
 			autorecording = true;
 		}
 	} else if( !Q_stricmp( action, "stop" ) ) {
 		if( autorecording ) {
-			Cbuf_ExecuteLine( "stop silent" );
+			Cmd_Execute( "stop silent" );
 			autorecording = false;
 		}
 
 		if( cg_autoaction_screenshot->integer && ( !spectator || cg_autoaction_spectator->integer ) ) {
-			Cbuf_ExecuteLine( temp( "screenshot autorecord/{} silent", name ) );
+			Cmd_Execute( "screenshot autorecord/{} silent", name );
 		}
 	} else if( !Q_stricmp( action, "cancel" ) ) {
 		if( autorecording ) {
-			Cbuf_ExecuteLine( "stop cancel silent" );
+			Cmd_Execute( "stop cancel silent" );
 			autorecording = false;
 		}
 	} else if( developer->integer ) {
@@ -170,7 +170,7 @@ static void CG_Cmd_DemoGet_f() {
 	}
 
 	TempAllocator temp = cls.frame_arena.temp();
-	Cbuf_ExecuteLine( temp( "demogeturl {}", Cmd_Argv( 1 ) ) );
+	Cmd_Execute( "demogeturl {}", Cmd_Argv( 1 ) );
 
 	demo_requested = true;
 }

@@ -513,7 +513,7 @@ static void SVC_RemoteCommand( const socket_t *socket, const netadr_t *address )
 		Com_Printf( "Bad rcon_password.\n" );
 	}
 	else {
-		Cbuf_ExecuteLine( Cmd_Args() );
+		Cmd_Execute( "{}", Cmd_Args() );
 	}
 
 	Com_EndRedirect();

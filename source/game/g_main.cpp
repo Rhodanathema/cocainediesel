@@ -116,8 +116,6 @@ void G_Init( unsigned int framemsec ) {
 
 	G_InitGameShared();
 
-	SV_ReadIPList();
-
 	game.snapFrameTime = framemsec;
 	game.frametime = game.snapFrameTime;
 	game.numBots = 0;
@@ -177,8 +175,6 @@ void G_Shutdown() {
 
 	ShutdownGametype();
 
-	SV_WriteIPList();
-
 	G_RemoveCommands();
 
 	G_FreeCallvotes();
@@ -215,7 +211,7 @@ void G_ExitLevel() {
 
 	if( loadmap ) {
 		TempAllocator temp = svs.frame_arena.temp();
-		Cbuf_ExecuteLine( temp( "map \"{}\"", nextmapname ) );
+		Cmd_Execute( "map \"{}\"", nextmapname );
 	}
 
 	G_SnapClients();

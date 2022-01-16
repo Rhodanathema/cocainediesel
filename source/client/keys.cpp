@@ -254,10 +254,10 @@ void Key_Event( int key, bool down ) {
 		const char * command = keybindings[ key ];
 		if( command != NULL ) {
 			if( StartsWith( command, "+" ) ) {
-				Cbuf_Add( "{}{} {}", down ? "+" : "-", command + 1, key );
+				Cmd_Execute( "{}{} {}", down ? "+" : "-", command + 1, key );
 			}
 			else if( down ) {
-				Cbuf_Add( "{}", command );
+				Cmd_Execute( "{}", command );
 			}
 		}
 	}

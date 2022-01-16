@@ -358,7 +358,7 @@ static void G_VoteKickBanPassed( callvotedata_t *vote ) {
 		return;
 	}
 
-	Cbuf_Add( "addip {} {}", ent->r.client->ip, 15 );
+	Cmd_Execute( "addip {} {}", ent->r.client->ip, 15 );
 	PF_DropClient( ent, DROP_TYPE_NORECONNECT, "Kicked" );
 }
 

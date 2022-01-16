@@ -251,9 +251,9 @@ static void Con_Execute() {
 		skip_slash++;
 
 	bool try_chat = cls.state == CA_ACTIVE;
-	bool executed = Cbuf_ExecuteLine( MakeSpan( skip_slash ), !try_chat );
+	bool executed = Cmd_ExecuteLine( MakeSpan( skip_slash ), !try_chat );
 	if( !executed && try_chat ) {
-		Cbuf_ExecuteLine( temp( "say {}", console.input ) );
+		Cmd_Execute( "say {}", console.input );
 	}
 
 	const HistoryEntry * last = &console.input_history[ ( console.history_head + console.history_count - 1 ) % ARRAY_COUNT( console.input_history ) ];

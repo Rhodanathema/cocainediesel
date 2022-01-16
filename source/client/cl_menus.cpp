@@ -683,7 +683,7 @@ static void DemoBrowser() {
 
 		if( clicked && ImGui::IsMouseDoubleClicked( 0 ) ) {
 			const char * cmd = yolodemo ? "yolodemo" : "demo";
-			Cbuf_Add( "{} \"{}\"", cmd, demo.path );
+			Cmd_Execute( "{} \"{}\"", cmd, demo.path );
 		}
 	}
 
@@ -717,7 +717,7 @@ static void CreateServer() {
 	CvarCheckbox( "Public", "sv_public" );
 
 	if( ImGui::Button( "Create server" ) ) {
-		Cbuf_Add( "map \"{}\"", map_name );
+		Cmd_Execute( "map \"{}\"", map_name );
 	}
 }
 
@@ -884,7 +884,7 @@ static void GameMenuButton( const char * label, const char * command, bool * cli
 	}
 
 	if( ImGui::Button( label, size ) ) {
-		Cbuf_Add( "{}", command );
+		Cmd_Execute( "{}", command );
 		if( clicked != NULL )
 			*clicked = true;
 	}
@@ -902,7 +902,7 @@ static void SendLoadout() {
 	}
 	loadout.append( " {}", selected_perk );
 
-	Cbuf_Add( "{}", loadout.c_str() );
+	Cmd_Execute( "{}", loadout.c_str() );
 }
 
 static Vec4 RGBA8ToVec4NosRGB( RGBA8 rgba ) {
@@ -1089,7 +1089,7 @@ static void GameMenu() {
 		else {
 			if( client_gs.gameState.match_state <= MatchState_Countdown ) {
 				if( ImGui::Checkbox( ready ? "Ready!" : "Not ready", &ready ) ) {
-					Cbuf_Add( "toggleready" );
+					Cmd_Execute( "toggleready" );
 				}
 			}
 
@@ -1273,8 +1273,6 @@ void UI_Refresh() {
 	if( Con_IsVisible() ) {
 		Con_Draw();
 	}
-
-	Cbuf_Execute();
 }
 
 void UI_ShowConnectingScreen() {

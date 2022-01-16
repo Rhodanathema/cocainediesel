@@ -448,12 +448,8 @@ void SP_target_delay( edict_t *ent );
 //
 // g_svcmds.c
 //
-void SV_ResetPacketFiltersTimeouts();
-bool SV_FilterPacket( char *from );
 void G_AddServerCommands();
 void G_RemoveCommands();
-void SV_ReadIPList();
-void SV_WriteIPList();
 
 //
 // p_view.c

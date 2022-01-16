@@ -16,8 +16,6 @@ struct ConsoleCommand {
 
 constexpr size_t MAX_COMMANDS = 1024;
 
-static String< 1024 > command_buffer;
-
 static ConsoleCommand commands[ MAX_COMMANDS ];
 static Hashtable< MAX_COMMANDS * 2 > commands_hashtable;
 
@@ -38,62 +36,78 @@ static ConsoleCommand * FindCommand( const char * name ) {
 	return FindCommand( MakeSpan( name ) );
 }
 
-static void Cmd_TokenizeString( Span< const char > str ); // TODO: nuke
+static Span< Span< const char > > TokenizeString( Allocator * a, Span< const char > str ) {
+	NonRAIIDynamicArray< Span< const char > > tokens;
+	results.init( a );
 
-bool Cbuf_ExecuteLine( Span< const char > line, bool warn_on_invalid ) {
-	Cmd_TokenizeString( line );
+	while( true ) {
+		Span< const char > token = ParseToken( &str, Parse_StopOnNewLine );
+		if( token.ptr == NULL )
+			return;
+		tokens.add( token );
+	}
 
-	if( Cmd_Argc() == 0 ) {
+	return tokens.span();
+}
+
+Span< Span< const char > > TokenizeString( Allocator * a, const char * str ) {
+	return TokenizeString( a, MakeSpan( str ) );
+}
+
+bool Cmd_ExecuteLine( Allocator * a, Span< const char > line, bool warn_on_invalid ) {
+	Span< Span< const char > > tokens = TokenizeString( str );
+	if( tokens.n == 0 ) {
 		return true;
 	}
 
-	const ConsoleCommand * command = FindCommand( Cmd_Argv( 0 ) );
+	Span< const char > args;
+	if( tokens.n >= 2 ) {
+		args = Span< const char >( tokens[ 1 ].ptr, tokens[ tokens.n - 1 ].end() - tokens[ 1 ].ptr );
+
+		if( args.ptr[ -1 ] == '"' ) {
+			args.ptr--;
+			args.n++;
+		}
+
+		if( args.end() < line.end() && *args.end() == '"' ) {
+			args.n++;
+		}
+	}
+
+	const char * args_cstr = ( *a )( "{}", args );
+	defer { FREE( a, args_cstr ); };
+
+	const ConsoleCommand * command = FindCommand( tokens[ 0 ] );
 	if( command != NULL && !command->disabled ) {
-		command->callback();
+		command->callback( args, tokens );
 		return true;
 	}
 
-	if( Cvar_Command() ) {
+	if( Cvar_Command( tokens ) ) {
 		return true;
 	}
 
 	if( warn_on_invalid ) {
-		Com_GGPrint( "Unknown command \"{}\"", Cmd_Argv( 0 ) );
+		Com_GGPrint( "Unknown command \"{}\"", tokens[ 0 ] );
 	}
 
 	return false;
 }
 
-void Cbuf_ExecuteLine( const char * line ) {
-	Cbuf_ExecuteLine( MakeSpan( line ), true );
+void Cmd_ExecuteLine( const char * line ) {
+	Cmd_ExecuteLine( MakeSpan( line ), true );
 }
 
-static void Cbuf_Execute( const char * str, bool skip_comments ) {
+static void Cmd_Execute( const char * str, bool skip_comments ) {
 	Span< const char > cursor = MakeSpan( str );
 	while( cursor.n > 0 ) {
 		Span< const char > line = GrabLine( cursor );
 		if( !skip_comments || !StartsWith( line, "//" ) ) {
-			Cbuf_ExecuteLine( line, true );
+			Cmd_ExecuteLine( line, true );
 		}
 
 		cursor += line.n + 1;
 	}
-}
-
-void Cbuf_AddLine( const char * text ) {
-	size_t length_with_newline = strlen( text ) + 1;
-	if( command_buffer.length() + length_with_newline > command_buffer.capacity() ) {
-		Com_Printf( S_COLOR_YELLOW "Typed too much stuff...\n" );
-		return;
-	}
-
-	command_buffer.append_raw( text, strlen( text ) );
-	command_buffer += '\n';
-}
-
-void Cbuf_Execute() {
-	Cbuf_Execute( command_buffer.c_str(), false );
-	command_buffer.clear();
 }
 
 static const char * Argv( int argc, char ** argv, int i ) {
@@ -106,33 +120,31 @@ static void ClearArg( int argc, char ** argv, int i ) {
 	}
 }
 
-void Cbuf_AddEarlyCommands( int argc, char ** argv ) {
+void Cmd_ExecuteEarlyCommands( int argc, char ** argv ) {
 	for( int i = 1; i < argc; i++ ) {
 		if( StrCaseEqual( argv[ i ], "-set" ) || StrCaseEqual( argv[ i ], "+set" ) ) {
-			Cbuf_Add( "set \"{}\" \"{}\"", Argv( argc, argv, i + 1 ), Argv( argc, argv, i + 2 ) );
+			Cmd_Execute( "set \"{}\" \"{}\"", Argv( argc, argv, i + 1 ), Argv( argc, argv, i + 2 ) );
 			ClearArg( argc, argv, i );
 			ClearArg( argc, argv, i + 1 );
 			ClearArg( argc, argv, i + 2 );
 			i += 2;
 		}
 		else if( StrCaseEqual( argv[ i ], "-exec" ) || StrCaseEqual( argv[ i ], "+exec" ) ) {
-			Cbuf_Add( "exec \"{}\"", Argv( argc, argv, i + 1 ) );
+			Cmd_Execute( "exec \"{}\"", Argv( argc, argv, i + 1 ) );
 			ClearArg( argc, argv, i );
 			ClearArg( argc, argv, i + 1 );
 			i += 1;
 		}
 		else if( StrCaseEqual( argv[ i ], "-config" ) || StrCaseEqual( argv[ i ], "+config" ) ) {
-			Cbuf_Add( "config \"{}\"", Argv( argc, argv, i + 1 ) );
+			Cmd_Execute( "config \"{}\"", Argv( argc, argv, i + 1 ) );
 			ClearArg( argc, argv, i );
 			ClearArg( argc, argv, i + 1 );
 			i += 1;
 		}
 	}
-
-	Cbuf_Execute();
 }
 
-void Cbuf_AddLateCommands( int argc, char ** argv ) {
+void Cmd_ExecuteLateCommands( int argc, char ** argv ) {
 	String< 1024 > buf;
 
 	// TODO: should probably not roundtrip to string and retokenize
@@ -141,7 +153,7 @@ void Cbuf_AddLateCommands( int argc, char ** argv ) {
 			continue;
 
 		if( StartsWith( argv[ i ], "-" ) || StartsWith( argv[ i ], "+" ) ) {
-			Cbuf_ExecuteLine( buf.c_str() );
+			Cmd_ExecuteLine( buf.c_str() );
 			buf.format( "{}", argv[ i ] + 1 );
 		}
 		else {
@@ -149,7 +161,7 @@ void Cbuf_AddLateCommands( int argc, char ** argv ) {
 		}
 	}
 
-	Cbuf_ExecuteLine( buf.c_str() );
+	Cmd_ExecuteLine( buf.c_str() );
 }
 
 static void ExecConfig( const char * path ) {
@@ -160,7 +172,7 @@ static void ExecConfig( const char * path ) {
 		return;
 	}
 
-	Cbuf_Execute( config, true );
+	Cmd_Execute( config, true );
 }
 
 static void Cmd_Exec_f() {
@@ -229,64 +241,6 @@ static void Cmd_Find_f() {
 void ExecDefaultCfg() {
 	DynamicString path( sys_allocator, "{}/base/default.cfg", RootDirPath() );
 	ExecConfig( path.c_str() );
-}
-
-/* DUMB SHIT */
-// TODO: just pass the span to commands and stop misusing this everywhere else
-
-static int cmd_argc;
-static char * cmd_argv[MAX_STRING_TOKENS];
-static char cmd_args[MAX_STRING_CHARS];
-
-int Cmd_Argc() {
-	return cmd_argc;
-}
-
-const char * Cmd_Argv( int arg ) {
-	return arg < cmd_argc ? cmd_argv[ arg ] : "";
-}
-
-char * Cmd_Args() {
-	return cmd_args;
-}
-
-// TODO: this sucks
-static void Cmd_TokenizeString( Span< const char > str ) {
-	for( int i = 0; i < cmd_argc; i++ ) {
-		FREE( sys_allocator, cmd_argv[ i ] );
-	}
-
-	strcpy( cmd_args, "" );
-
-	cmd_argc = 0;
-
-	while( cmd_argc < MAX_STRING_TOKENS ) {
-		Span< const char > token = ParseToken( &str, Parse_StopOnNewLine );
-		if( token.ptr == NULL )
-			return;
-
-		cmd_argv[ cmd_argc ] = ( *sys_allocator )( "{}", token );
-
-		if( cmd_argc == 1 ) {
-			Span< const char > rest_of_line( token.ptr, str.end() - token.ptr );
-			if( rest_of_line.ptr[ -1 ] == '"' ) {
-				rest_of_line.ptr--;
-				rest_of_line.n++;
-			}
-			ggformat( cmd_args, sizeof( cmd_args ), "{}", rest_of_line );
-			size_t n = strlen( cmd_args );
-			while( n > 0 && cmd_args[ n - 1 ] == ' ' ) {
-				cmd_args[ n - 1 ] = '\0';
-				n--;
-			}
-		}
-
-		cmd_argc++;
-	}
-}
-
-void Cmd_TokenizeString( const char * str ) {
-	Cmd_TokenizeString( MakeSpan( str ) );
 }
 
 void AddCommand( const char * name, ConsoleCommandCallback callback ) {
@@ -426,20 +380,12 @@ void Cmd_Init() {
 
 	SetTabCompletionCallback( "exec", TabCompleteExec );
 	SetTabCompletionCallback( "config", TabCompleteConfig );
-
-	command_buffer.clear();
-
-	cmd_argc = 0;
 }
 
 void Cmd_Shutdown() {
 	RemoveCommand( "exec" );
 	RemoveCommand( "config" );
 	RemoveCommand( "find" );
-
-	for( int i = 0; i < cmd_argc; i++ ) {
-		FREE( sys_allocator, cmd_argv[ i ] );
-	}
 
 	for( size_t i = 0; i < commands_hashtable.size(); i++ ) {
 		ConsoleCommand * command = &commands[ i ];

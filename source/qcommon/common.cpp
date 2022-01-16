@@ -273,26 +273,22 @@ void Qcommon_Init( int argc, char ** argv ) {
 	InitFS();
 	FS_Init();
 
-	// prepare enough of the subsystems to handle
-	// cvar and command buffer management
 	Cmd_Init();
-	Cvar_PreInit();
+	Cvar_Init();
 	Key_Init(); // need to be able to bind keys before running configs
 
 	developer = NewCvar( "developer", "0", 0 );
 
 	if( !is_dedicated_server ) {
 		ExecDefaultCfg();
-		Cbuf_ExecuteLine( "exec config.cfg" );
-		Cbuf_ExecuteLine( "exec autoexec.cfg" );
+		Cmd_Execute( "exec config.cfg" );
+		Cmd_Execute( "exec autoexec.cfg" );
 	}
 	else {
-		Cbuf_ExecuteLine( "config dedicated_autoexec.cfg" );
+		Cmd_Execute( "config dedicated_autoexec.cfg" );
 	}
 
-	Cbuf_AddEarlyCommands( argc, argv );
-
-	Cvar_Init();
+	Cmd_ExecuteEarlyCommands( argc, argv );
 
 	AddCommand( "quit", Com_DeferQuit );
 
@@ -319,7 +315,7 @@ void Qcommon_Init( int argc, char ** argv ) {
 	SV_Init();
 	CL_Init();
 
-	Cbuf_AddLateCommands( argc, argv );
+	Cmd_ExecuteLateCommands( argc, argv );
 }
 
 bool Qcommon_Frame( unsigned int realMsec ) {
@@ -345,15 +341,13 @@ bool Qcommon_Frame( unsigned int realMsec ) {
 	}
 
 	if( is_dedicated_server ) {
+		// execute commands from stdin
 		while( true ) {
 			const char * s = Sys_ConsoleInput();
 			if( s == NULL )
 				break;
-			Cbuf_ExecuteLine( s );
+			Cmd_ExecuteLine( s );
 		}
-
-		// process console commands
-		Cbuf_Execute();
 	}
 
 	SV_Frame( realMsec, gameMsec );

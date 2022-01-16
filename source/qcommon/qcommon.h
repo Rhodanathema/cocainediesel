@@ -201,22 +201,20 @@ Command text buffering and command execution
 void Cmd_Init();
 void Cmd_Shutdown();
 
-void Cbuf_AddLine( const char * text );
-void Cbuf_Execute();
-bool Cbuf_ExecuteLine( Span< const char > line, bool warn_on_invalid );
-void Cbuf_ExecuteLine( const char * line );
-
-void Cbuf_AddEarlyCommands( int argc, char ** argv );
-void Cbuf_AddLateCommands( int argc, char ** argv );
+bool Cmd_ExecuteLine( Span< const char > line, bool warn_on_invalid );
+void Cmd_ExecuteLine( const char * line );
 
 template< typename... Rest >
-void Cbuf_Add( const char * fmt, const Rest & ... rest ) {
+bool Cmd_Execute( const char * fmt, const Rest & ... rest ) {
 	char buf[ 1024 ];
 	ggformat( buf, sizeof( buf ), fmt, rest... );
-	Cbuf_AddLine( buf );
+	return Cmd_ExecuteLine( buf );
 }
 
-using ConsoleCommandCallback = void ( * )();
+void Cmd_ExecuteEarlyCommands( int argc, char ** argv );
+void Cmd_ExecuteLateCommands( int argc, char ** argv );
+
+using ConsoleCommandCallback = void ( * )( const char * args, Span< const char > tokens );
 using TabCompletionCallback = Span< const char * > ( * )( TempAllocator * a, const char * partial );
 
 void AddCommand( const char * name, ConsoleCommandCallback function );
@@ -229,10 +227,7 @@ Span< const char * > TabCompleteArgument( TempAllocator * a, const char * partia
 Span< const char * > TabCompleteFilename( TempAllocator * a, const char * partial, const char * search_dir, const char * extension );
 Span< const char * > TabCompleteFilenameHomeDir( TempAllocator * a, const char * partial, const char * search_dir, const char * extension );
 
-int Cmd_Argc();
-const char * Cmd_Argv( int arg );
-char * Cmd_Args();
-void Cmd_TokenizeString( const char * text );
+Span< Span< const char > > TokenizeString( Allocator * a, const char * text );
 
 void ExecDefaultCfg();
 

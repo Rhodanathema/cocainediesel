@@ -185,7 +185,7 @@ CLIENT COMMAND EXECUTION
 * Sends the first message from the server to a connected client.
 * This will be sent on the initial connection and upon each server load.
 */
-static void SV_New_f( client_t *client ) {
+static void SV_New_f( client_t * client, Span< Span< const char > > tokens ) {
 	Com_DPrintf( "New() from %s\n", client->name );
 
 	// if in CS_AWAITING we have sent the response packet the new once already,
@@ -231,9 +231,7 @@ static void SV_New_f( client_t *client ) {
 	client->state = CS_CONNECTING;
 }
 
-static void SV_Configstrings_f( client_t *client ) {
-	int start;
-
+static void SV_Configstrings_f( client_t * client, Span< Span< const char > > tokens ) {
 	if( client->state == CS_CONNECTING ) {
 		Com_DPrintf( "Start Configstrings() from %s\n", client->name );
 		client->state = CS_CONNECTED;
@@ -247,13 +245,13 @@ static void SV_Configstrings_f( client_t *client ) {
 	}
 
 	// handle the case of a level changing while a client was connecting
-	if( atoi( Cmd_Argv( 1 ) ) != svs.spawncount ) {
+	if( atoi( tokens[ 1 ] ) != svs.spawncount ) {
 		Com_Printf( "SV_Configstrings_f from different level\n" );
 		SV_SendServerCommand( client, "reconnect" );
 		return;
 	}
 
-	start = atoi( Cmd_Argv( 2 ) );
+	int start = atoi( tokens[ 2 ] );
 	if( start < 0 ) {
 		start = 0;
 	}
@@ -275,11 +273,7 @@ static void SV_Configstrings_f( client_t *client ) {
 	}
 }
 
-static void SV_Baselines_f( client_t *client ) {
-	int start;
-	SyncEntityState nullstate;
-	SyncEntityState *base;
-
+static void SV_Baselines_f( client_t * client, Span< Span< const char > > tokens ) {
 	Com_DPrintf( "Baselines() from %s\n", client->name );
 
 	if( client->state != CS_CONNECTED ) {
@@ -288,24 +282,25 @@ static void SV_Baselines_f( client_t *client ) {
 	}
 
 	// handle the case of a level changing while a client was connecting
-	if( atoi( Cmd_Argv( 1 ) ) != svs.spawncount ) {
+	if( atoi( tokens[ 1 ] ) != svs.spawncount ) {
 		Com_Printf( "SV_Baselines_f from different level\n" );
 		SV_New_f( client );
 		return;
 	}
 
-	start = atoi( Cmd_Argv( 2 ) );
+	int start = atoi( tokens[ 2 ] );
 	if( start < 0 ) {
 		start = 0;
 	}
 
+	SyncEntityState nullstate;
 	memset( &nullstate, 0, sizeof( nullstate ) );
 
 	// write a packet full of data
 	SV_InitClientMessage( client, &tmpMessage, NULL, 0 );
 
 	while( tmpMessage.cursize < FRAGMENT_SIZE * 3 && start < MAX_EDICTS ) {
-		base = &sv.baselines[start];
+		const SyncEntityState * base = &sv.baselines[start];
 		if( base->number != 0 ) {
 			MSG_WriteUint8( &tmpMessage, svc_spawnbaseline );
 			MSG_WriteDeltaEntity( &tmpMessage, &nullstate, base, true );
@@ -324,7 +319,7 @@ static void SV_Baselines_f( client_t *client ) {
 	SV_SendMessageToClient( client, &tmpMessage );
 }
 
-static void SV_Begin_f( client_t *client ) {
+static void SV_Begin_f( client_t * client, Span< Span< const char > > tokens ) {
 	Com_DPrintf( "Begin() from %s\n", client->name );
 
 	// wsw : r1q2[start] : could be abused to respawn or cause spam/other mod-specific problems
@@ -338,7 +333,7 @@ static void SV_Begin_f( client_t *client ) {
 	// wsw : r1q2[end]
 
 	// handle the case of a level changing while a client was connecting
-	if( atoi( Cmd_Argv( 1 ) ) != svs.spawncount ) {
+	if( atoi( tokens[ 1 ] ) != svs.spawncount ) {
 		Com_Printf( "SV_Begin_f from different level\n" );
 		SV_SendServerCommand( client, "changing" );
 		SV_SendServerCommand( client, "reconnect" );
@@ -353,12 +348,12 @@ static void SV_Begin_f( client_t *client ) {
 
 //=============================================================================
 
-static void SV_Disconnect_f( client_t *client ) {
+static void SV_Disconnect_f( client_t * client, Span< Span< const char > > tokens ) {
 	SV_DropClient( client, DROP_TYPE_GENERAL, NULL );
 }
 
 
-static void SV_UserinfoCommand_f( client_t *client ) {
+static void SV_UserinfoCommand_f( client_t * client, Span< Span< const char > > tokens ) {
 	const char *info;
 	int64_t time;
 
@@ -381,49 +376,43 @@ static void SV_UserinfoCommand_f( client_t *client ) {
 	}
 }
 
-static void SV_NoDelta_f( client_t *client ) {
+static void SV_NoDelta_f( client_t * client, Span< Span< const char > > tokens ) {
 	client->nodelta = true;
 	client->nodelta_frame = 0;
 	client->lastframe = -1; // jal : I'm not sure about this. Seems like it's missing but...
 }
 
-typedef struct {
-	const char *name;
-	void ( *func )( client_t *client );
-} ucmd_t;
+struct ucmd_t {
+	const char * name;
+	void ( * func )( client_t * client, Span< Span< const char > > tokens );
+};
 
-ucmd_t ucmds[] =
-{
-	// auto issued
+static ucmd_t ucmds[] = {
 	{ "new", SV_New_f },
 	{ "configstrings", SV_Configstrings_f },
 	{ "baselines", SV_Baselines_f },
 	{ "begin", SV_Begin_f },
 	{ "disconnect", SV_Disconnect_f },
 	{ "usri", SV_UserinfoCommand_f },
-
 	{ "nodelta", SV_NoDelta_f },
-
-	{ NULL, NULL }
 };
 
-static void SV_ExecuteUserCommand( client_t *client, const char *s ) {
-	ucmd_t *u;
+static void SV_ExecuteUserCommand( client_t * client, const char * s ) {
+	Span< Span< const char > > tokens = TokenizeString( str );
+	if( tokens.n == 0 )
+		return;
 
-	Cmd_TokenizeString( s );
-
-	for( u = ucmds; u->name; u++ ) {
-		if( !strcmp( Cmd_Argv( 0 ), u->name ) ) {
-			u->func( client );
-			break;
+	for( ucmd_t cmd : ucmds ) {
+		if( StrEqual( tokens[ 0 ], cmd.name ) ) {
+			cmd.func( client, tokens );
+			return;
 		}
 	}
 
-	if( client->state >= CS_SPAWNED && !u->name && sv.state == ss_game ) {
-		ClientCommand( client->edict );
+	if( client->state >= CS_SPAWNED && sv.state == ss_game ) {
+		ClientCommand( client->edict, tokens );
 	}
 }
-
 
 /*
 ===========================================================================

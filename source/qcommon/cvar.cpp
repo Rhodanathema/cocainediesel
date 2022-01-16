@@ -65,10 +65,6 @@ static Cvar * FindCvar( const char * name ) {
 	return &cvars[ idx ];
 }
 
-bool IsCvar( const char * name ) {
-	return FindCvar( name ) != NULL;
-}
-
 const char * Cvar_String( const char * name ) {
 	return FindCvar( name )->value;
 }
@@ -256,6 +252,8 @@ static void SetConfigCvar() {
 		return;
 	}
 
+	// TODO: if the variable already exists we should set it
+
 	u64 hash = CaseHash64( Cmd_Argv( 1 ) );
 	u64 idx = config_entries_hashtable.size();
 	if( !config_entries_hashtable.get( hash, &idx ) ) {
@@ -299,7 +297,7 @@ void Cvar_WriteVariables( DynamicString * config ) {
 
 	for( size_t i = 0; i < config_entries_hashtable.size(); i++ ) {
 		const ConfigEntry * entry = &config_entries[ i ];
-		if( IsCvar( entry->name ) )
+		if( FindCvar( entry->name ) != NULL )
 			continue;
 		lines.add( ( *sys_allocator )( "set {} \"{}\"\r\n", entry->name, entry->value ) );
 	}
@@ -333,7 +331,7 @@ const char * Cvar_GetServerInfo() {
 	return MakeInfoString( CvarFlag_ServerInfo );
 }
 
-void Cvar_PreInit() {
+void Cvar_Init() {
 	cvars_hashtable.clear();
 	config_entries_hashtable.clear();
 
@@ -341,14 +339,6 @@ void Cvar_PreInit() {
 	AddCommand( "seta", SetConfigCvar );
 	AddCommand( "setau", SetConfigCvar );
 	AddCommand( "setas", SetConfigCvar );
-}
-
-void Cvar_Init() {
-	RemoveCommand( "set" );
-	RemoveCommand( "seta" );
-	RemoveCommand( "setau" );
-	RemoveCommand( "setas" );
-
 	AddCommand( "reset", Cvar_Reset_f );
 }
 

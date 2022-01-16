@@ -118,25 +118,17 @@ void CL_UpdateClientCommandsToServer( msg_t *msg ) {
 }
 
 void CL_ServerDisconnect_f() {
-	char menuparms[MAX_STRING_CHARS];
-	int type;
-	char reason[MAX_STRING_CHARS];
-
-	type = atoi( Cmd_Argv( 1 ) );
+	int type = atoi( Cmd_Argv( 1 ) );
 	if( type < 0 || type >= DROP_TYPE_TOTAL ) {
 		type = DROP_TYPE_GENERAL;
 	}
 
-	Q_strncpyz( reason, Cmd_Argv( 2 ), sizeof( reason ) );
-
 	CL_Disconnect_f();
 
-	Com_Printf( "Connection was closed by server: %s\n", reason );
+	Com_Printf( "Connection was closed by server: %s\n", Cmd_Argv( 2 ) );
 
-	snprintf( menuparms, sizeof( menuparms ), "menu_open connfailed dropreason %i droptype %i rejectmessage \"%s\"",
-				 DROP_REASON_CONNTERMINATED, type, reason );
-
-	Cbuf_ExecuteLine( menuparms );
+	Cmd_Execute( "menu_open connfailed dropreason {} droptype {} rejectmessage \"{}\"",
+		DROP_REASON_CONNTERMINATED, type, Cmd_Argv( 2 ) );
 }
 
 /*
@@ -414,11 +406,8 @@ void CL_Disconnect( const char *message ) {
 	CL_SetClientState( CA_DISCONNECTED );
 
 	if( message != NULL ) {
-		char menuparms[MAX_STRING_CHARS];
-		snprintf( menuparms, sizeof( menuparms ), "menu_open connfailed dropreason %i droptype %i rejectmessage \"%s\"",
-					 ( wasconnecting ? DROP_REASON_CONNFAILED : DROP_REASON_CONNERROR ), DROP_TYPE_GENERAL, message );
-
-		Cbuf_ExecuteLine( menuparms );
+		Cmd_Execute( "menu_open connfailed dropreason {} droptype {} rejectmessage \"{}\"",
+			wasconnecting ? DROP_REASON_CONNFAILED : DROP_REASON_CONNERROR, DROP_TYPE_GENERAL, message );
 	}
 }
 
@@ -598,16 +587,14 @@ static void CL_ConnectionlessPacket( const socket_t *socket, const netadr_t *add
 		Com_Printf( "Connection refused: %s\n", cls.rejectmessage );
 		if( rejectflag & DROP_FLAG_AUTORECONNECT ) {
 			Com_Printf( "Automatic reconnecting allowed.\n" );
-		} else {
-			char menuparms[MAX_STRING_CHARS];
-
+		}
+		else {
 			Com_Printf( "Automatic reconnecting not allowed.\n" );
 
 			CL_Disconnect( NULL );
-			snprintf( menuparms, sizeof( menuparms ), "menu_open connfailed dropreason %i droptype %i rejectmessage \"%s\"",
-						 DROP_REASON_CONNFAILED, cls.rejecttype, cls.rejectmessage );
 
-			Cbuf_ExecuteLine( menuparms );
+			Cmd_Execute( "menu_open connfailed dropreason {} droptype {} rejectmessage \"{}\"",
+				DROP_REASON_CONNFAILED, cls.rejecttype, cls.rejectmessage );
 		}
 
 		return;

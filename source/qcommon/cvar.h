@@ -28,9 +28,11 @@ struct Cvar {
 // that the client knows to send it to the server
 extern bool userinfo_modified;
 
+void Cvar_Init();
+void Cvar_Shutdown();
+
 Cvar * NewCvar( const char * name, const char * value, u32 flags );
 
-bool IsCvar( const char * name );
 const char * Cvar_String( const char * name );
 int Cvar_Integer( const char * name );
 float Cvar_Float( const char * name );
@@ -51,8 +53,5 @@ void ResetCheatCvars();
 class DynamicString;
 void Cvar_WriteVariables( DynamicString * config );
 
-void Cvar_PreInit();
-void Cvar_Init();
-void Cvar_Shutdown();
 const char * Cvar_GetUserInfo();
 const char * Cvar_GetServerInfo();

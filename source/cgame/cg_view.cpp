@@ -73,7 +73,7 @@ bool CG_ChaseStep( int step ) {
 	}
 
 	if( !cgs.demoPlaying ) {
-		Cbuf_ExecuteLine( step > 0 ? "chasenext" : "chaseprev" );
+		Cmd_Execute( step > 0 ? "chasenext" : "chaseprev" );
 		return true;
 	}
 
@@ -308,7 +308,7 @@ static void CG_UpdateChaseCam() {
 
 	if( cmd.buttons & BUTTON_ATTACK ) {
 		if( cgs.demoPlaying || ISREALSPECTATOR() ) {
-			Cbuf_ExecuteLine( cgs.demoPlaying ? "democamswitch" : "camswitch" );
+			Cmd_Execute( cgs.demoPlaying ? "democamswitch" : "camswitch" );
 		}
 		chaseCam.key_pressed = true;
 	}
