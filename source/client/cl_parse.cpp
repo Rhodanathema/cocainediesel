@@ -53,11 +53,6 @@ bool CL_DownloadFile( const char * filename, DownloadCompleteCallback callback )
 		return false;
 	}
 
-	if( cls.socket->type == SOCKET_LOOPBACK ) {
-		Com_Printf( "Can't download from a local server.\n" );
-		return false;
-	}
-
 	Com_Printf( "Asking to download: %s\n", filename );
 
 	download = { };
@@ -92,10 +87,7 @@ SERVER CONNECTING MESSAGES
 */
 
 static void CL_ParseServerData( msg_t *msg ) {
-	Com_DPrintf( "Serverdata packet received.\n" );
-
 	// wipe the client_state_t struct
-
 	CL_ClearState();
 	CL_SetClientState( CA_CONNECTED );
 
@@ -131,8 +123,8 @@ static void CL_ParseServerData( msg_t *msg ) {
 		cls.download_url = CopyString( sys_allocator, download_url );
 		cls.download_url_is_game_server = false;
 	}
-	else if( cls.serveraddress.type != NA_LOOPBACK ) {
-		cls.download_url = CopyString( sys_allocator, temp( "http://{}", NET_AddressToString( &cls.serveraddress ) ) );
+	else {
+		cls.download_url = CopyString( sys_allocator, temp( "http://{}", cls.serveraddress ) );
 		cls.download_url_is_game_server = true;
 	}
 
@@ -164,7 +156,8 @@ static void CL_ParseFrame( msg_t *msg ) {
 				cls.demo.meta_data_realsize = 0;
 
 				// write out messages to hold the startup information
-				SNAP_BeginDemoRecording( cls.demo.file, 0x10000 + cl.servercount, cl.snapFrameTime,
+				TempAllocator temp = cls.frame_arena.temp();
+				SNAP_BeginDemoRecording( &temp, cls.demo.file, 0x10000 + cl.servercount, cl.snapFrameTime,
 										 cl.configstrings[0], cl_baselines );
 
 				// the rest of the demo file will be individual frames
@@ -291,7 +284,7 @@ static void CL_ParseServerCommand( msg_t *msg ) {
 
 	// filter out these server commands to be called from the client
 	for( cmd = svcmds; cmd->name; cmd++ ) {
-		if( !strcmp( s, cmd->name ) ) {
+		if( StrEqual( s, cmd->name ) ) {
 			cmd->func();
 			return;
 		}
@@ -310,24 +303,21 @@ ACTION MESSAGES
 
 void CL_ParseServerMessage( msg_t *msg ) {
 	if( cl_shownet->integer == 1 ) {
-		Com_Printf( "%" PRIuPTR " ", (uintptr_t)msg->cursize );
+		Com_GGPrint( "{} ", msg->cursize );
 	} else if( cl_shownet->integer >= 2 ) {
 		Com_Printf( "------------------\n" );
 	}
 
 	// parse the message
 	while( msg->readcount < msg->cursize ) {
-		int cmd;
-		size_t meta_data_maxsize;
-
-		cmd = MSG_ReadUint8( msg );
+		int cmd = MSG_ReadUint8( msg );
 		if( cl_debug_serverCmd->integer & 4 ) {
-			Com_Printf( "%3" PRIi64 ":CMD %i %s\n", (int64_t)(msg->readcount - 1), cmd, !svc_strings[cmd] ? "bad" : svc_strings[cmd] );
+			Com_GGPrint( "{}:CMD {} {}", msg->readcount - 1, cmd, !svc_strings[cmd] ? "bad" : svc_strings[cmd] );
 		}
 
 		if( cl_shownet->integer >= 2 ) {
 			if( !svc_strings[cmd] ) {
-				Com_Printf( "%3" PRIi64 ":BAD CMD %i\n", (int64_t)(msg->readcount - 1), cmd );
+				Com_GGPrint( "{}:BAD CMD {}", msg->readcount - 1, cmd );
 			} else {
 				SHOWNET( msg, svc_strings[cmd] );
 			}
@@ -373,7 +363,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 				cls.reliableAcknowledge = MSG_ReadUintBase128( msg );
 				cls.ucmdAcknowledged = MSG_ReadUintBase128( msg );
 				if( cl_debug_serverCmd->integer & 4 ) {
-					Com_Printf( "svc_clcack:reliable cmd ack:%" PRIi64 " ucmdack:%" PRIi64 "\n", cls.reliableAcknowledge, cls.ucmdAcknowledged );
+					Com_GGPrint( "svc_clcack:reliable cmd ack:{} ucmdack:{}", cls.reliableAcknowledge, cls.ucmdAcknowledged );
 				}
 				break;
 
@@ -381,13 +371,13 @@ void CL_ParseServerMessage( msg_t *msg ) {
 				CL_ParseFrame( msg );
 				break;
 
-			case svc_demoinfo:
+			case svc_demoinfo: {
 				assert( cls.demo.playing );
 
 				MSG_ReadInt32( msg );
 				MSG_ReadInt32( msg );
 				cls.demo.meta_data_realsize = (size_t)MSG_ReadInt32( msg );
-				meta_data_maxsize = (size_t)MSG_ReadInt32( msg );
+				size_t meta_data_maxsize = (size_t)MSG_ReadInt32( msg );
 
 				// sanity check
 				if( cls.demo.meta_data_realsize > meta_data_maxsize ) {
@@ -399,7 +389,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 
 				MSG_ReadData( msg, cls.demo.meta_data, cls.demo.meta_data_realsize );
 				MSG_SkipData( msg, meta_data_maxsize - cls.demo.meta_data_realsize );
-				break;
+			} break;
 
 			case svc_playerinfo:
 			case svc_packetentities:

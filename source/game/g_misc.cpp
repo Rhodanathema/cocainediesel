@@ -68,7 +68,7 @@ static void path_corner_touch( edict_t *self, edict_t *other, Plane *plane, int 
 	v = other->movetarget->s.origin - other->s.origin;
 }
 
-void SP_path_corner( edict_t *self ) {
+void SP_path_corner( edict_t * self, const spawn_temp_t * st ) {
 	if( self->name == EMPTY_HASH ) {
 		Com_GGPrint( "path_corner with no name at {}", self->s.origin );
 		G_FreeEdict( self );
@@ -105,7 +105,7 @@ static void func_wall_use( edict_t *self, edict_t *other, edict_t *activator ) {
 	}
 }
 
-void SP_func_wall( edict_t *self ) {
+void SP_func_wall( edict_t * self, const spawn_temp_t * st ) {
 	G_InitMover( self );
 	self->r.solid = SOLID_NOT;
 
@@ -125,9 +125,6 @@ void SP_func_wall( edict_t *self ) {
 	// yell if the spawnflags are odd
 	if( self->spawnflags & 4 ) {
 		if( !( self->spawnflags & 2 ) ) {
-			if( developer->integer ) {
-				Com_Printf( "func_wall START_ON without TOGGLE\n" );
-			}
 			self->spawnflags |= 2;
 		}
 	}
@@ -142,21 +139,21 @@ void SP_func_wall( edict_t *self ) {
 	GClip_LinkEntity( self );
 }
 
-void SP_func_static( edict_t *ent ) {
+void SP_func_static( edict_t * ent, const spawn_temp_t * st ) {
 	G_InitMover( ent );
 	ent->movetype = MOVETYPE_NONE;
 	ent->s.svflags = SVF_BROADCAST;
 	GClip_LinkEntity( ent );
 }
 
-void SP_model( edict_t *ent ) {
+void SP_model( edict_t * ent, const spawn_temp_t * st ) {
 	ent->s.svflags &= ~SVF_NOCLIENT;
 	GClip_LinkEntity( ent );
 }
 
-void SP_decal( edict_t * ent ) {
+void SP_decal( edict_t * ent, const spawn_temp_t * st ) {
 	ent->s.svflags &= ~SVF_NOCLIENT;
 	ent->s.type = ET_DECAL;
-	ent->s.radius = st.radius;
+	ent->s.radius = st->radius;
 	GClip_LinkEntity( ent );
 }

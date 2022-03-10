@@ -24,13 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 static bool sv_initialized = false;
 
-// IPv4
-Cvar *sv_ip;
 Cvar *sv_port;
-
-// IPv6
-Cvar *sv_ip6;
-Cvar *sv_port6;
 
 Cvar *sv_downloadurl;
 
@@ -41,7 +35,6 @@ Cvar *rcon_password;         // password for remote server commands
 
 Cvar *sv_maxclients;
 
-Cvar *sv_showRcon;
 Cvar *sv_showChallenge;
 Cvar *sv_showInfoQueries;
 
@@ -112,7 +105,6 @@ static bool SV_ProcessPacket( netchan_t *netchan, msg_t *msg ) {
 		int zerror = Netchan_DecompressMessage( msg );
 		if( zerror < 0 ) {
 			// compression error. Drop the packet
-			Com_DPrintf( "SV_ProcessPacket: Compression error %i. Dropping packet\n", zerror );
 			return false;
 		}
 	}
@@ -121,98 +113,52 @@ static bool SV_ProcessPacket( netchan_t *netchan, msg_t *msg ) {
 }
 
 static void SV_ReadPackets() {
-	ZoneScoped;
+	TracyZoneScoped;
 
-	static msg_t msg;
-	static uint8_t msgData[MAX_MSGLEN];
-
-	socket_t * sockets[] = {
-		&svs.socket_loopback,
-		&svs.socket_udp,
-		&svs.socket_udp6,
-	};
-
-	MSG_Init( &msg, msgData, sizeof( msgData ) );
-
-	for( size_t socketind = 0; socketind < ARRAY_COUNT( sockets ); socketind++ ) {
-		socket_t * socket = sockets[socketind];
-
-		if( !socket->open ) {
-			continue;
-		}
-
-		int ret;
-		netadr_t address;
-		while( ( ret = NET_GetPacket( socket, &address, &msg ) ) != 0 ) {
-			if( ret == -1 ) {
-				Com_Printf( "NET_GetPacket: Error: %s\n", NET_ErrorString() );
-				continue;
-			}
-
-			// check for connectionless packet (0xffffffff) first
-			if( *(int *)msg.data == -1 ) {
-				SV_ConnectionlessPacket( socket, &address, &msg );
-				continue;
-			}
-
-			MSG_BeginReading( &msg );
-			MSG_ReadInt32( &msg ); // sequence number
-			MSG_ReadInt32( &msg ); // sequence number
-			u64 session_id = MSG_ReadUint64( &msg );
-
-			for( int i = 0; i < sv_maxclients->integer; i++ ) {
-				client_t * cl = &svs.clients[ i ];
-
-				if( cl->state == CS_FREE || cl->state == CS_ZOMBIE ) {
-					continue;
-				}
-				if( cl->edict && ( cl->edict->s.svflags & SVF_FAKECLIENT ) ) {
-					continue;
-				}
-
-				if( cl->netchan.session_id != session_id ) {
-					continue;
-				}
-
-				cl->netchan.remoteAddress = address;
-
-				if( SV_ProcessPacket( &cl->netchan, &msg ) ) { // this is a valid, sequenced packet, so process it
-					cl->lastPacketReceivedTime = svs.realtime;
-					SV_ParseClientMessage( cl, &msg );
-				}
-
-				break;
-			}
-		}
+	uint8_t data[ MAX_MSGLEN ];
+	NetAddress source;
+	size_t bytes_received = UDPReceive( svs.socket, &source, data, sizeof( data ) );
+	if( bytes_received == 0 ) {
+		return;
 	}
 
-	// handle clients with individual sockets
+	msg_t msg;
+	MSG_Init( &msg, data, sizeof( data ) );
+	msg.cursize = bytes_received;
+
+	// check for connectionless packet (0xffffffff) first
+	if( *(int *)msg.data == -1 ) {
+		SV_ConnectionlessPacket( source, &msg );
+		return;
+	}
+
+	MSG_BeginReading( &msg );
+	MSG_ReadInt32( &msg ); // sequence number
+	MSG_ReadInt32( &msg ); // sequence number
+	u64 session_id = MSG_ReadUint64( &msg );
+
 	for( int i = 0; i < sv_maxclients->integer; i++ ) {
 		client_t * cl = &svs.clients[ i ];
 
-		if( cl->state == CS_ZOMBIE || cl->state == CS_FREE ) {
+		if( cl->state == CS_FREE || cl->state == CS_ZOMBIE ) {
+			continue;
+		}
+		if( cl->edict && ( cl->edict->s.svflags & SVF_FAKECLIENT ) ) {
 			continue;
 		}
 
-		if( !cl->individual_socket ) {
+		if( cl->netchan.session_id != session_id ) {
 			continue;
 		}
 
-		// not while, we only handle one packet per client at a time here
-		int ret;
-		netadr_t address;
-		if( ( ret = NET_GetPacket( cl->netchan.socket, &address, &msg ) ) != 0 ) {
-			if( ret == -1 ) {
-				Com_Printf( "Error receiving packet from %s: %s\n", NET_AddressToString( &cl->netchan.remoteAddress ),
-							NET_ErrorString() );
-			} else {
-				if( SV_ProcessPacket( &cl->netchan, &msg ) ) {
-					// this is a valid, sequenced packet, so process it
-					cl->lastPacketReceivedTime = svs.realtime;
-					SV_ParseClientMessage( cl, &msg );
-				}
-			}
+		cl->netchan.remoteAddress = source;
+
+		if( SV_ProcessPacket( &cl->netchan, &msg ) ) { // this is a valid, sequenced packet, so process it
+			cl->lastPacketReceivedTime = svs.realtime;
+			SV_ParseClientMessage( cl, &msg );
 		}
+
+		break;
 	}
 }
 
@@ -228,7 +174,7 @@ static void SV_ReadPackets() {
 * if necessary
 */
 static void SV_CheckTimeouts() {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	client_t *cl;
 	int i;
@@ -246,19 +192,13 @@ static void SV_CheckTimeouts() {
 
 		if( cl->state == CS_ZOMBIE && cl->lastPacketReceivedTime + 1000 * sv_zombietime->number < svs.realtime ) {
 			cl->state = CS_FREE; // can now be reused
-			if( cl->individual_socket ) {
-				NET_CloseSocket( &cl->socket );
-			}
 			continue;
 		}
 
 		if( cl->state != CS_FREE && cl->state != CS_ZOMBIE &&
 			cl->lastPacketReceivedTime + 1000 * sv_timeout->number < svs.realtime ) {
-			SV_DropClient( cl, DROP_TYPE_GENERAL, "%s", "Error: Connection timed out" );
+			SV_DropClient( cl, "%s", "Error: Connection timed out" );
 			cl->state = CS_FREE; // don't bother with zombie state
-			if( cl->socket.open ) {
-				NET_CloseSocket( &cl->socket );
-			}
 		}
 	}
 }
@@ -271,7 +211,7 @@ static void SV_CheckTimeouts() {
 * Applies latched userinfo updates if the timeout is over.
 */
 static void SV_CheckLatchedUserinfoChanges() {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	client_t *cl;
 	int i;
@@ -294,7 +234,7 @@ static void SV_CheckLatchedUserinfoChanges() {
 
 #define WORLDFRAMETIME 16 // 62.5fps
 static bool SV_RunGameFrame( int msec ) {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	static int64_t accTime = 0;
 	bool refreshSnapshot;
@@ -322,24 +262,10 @@ static bool SV_RunGameFrame( int msec ) {
 	// if there aren't pending packets to be sent, we can sleep
 	if( is_dedicated_server && !sentFragments && !refreshSnapshot ) {
 		int sleeptime = Min2( WORLDFRAMETIME - ( accTime + 1 ), sv.nextSnapTime - ( svs.gametime + 1 ) );
-
 		if( sleeptime > 0 ) {
-			socket_t *sockets[] = { &svs.socket_udp, &svs.socket_udp6 };
-			socket_t *opened_sockets[ARRAY_COUNT( sockets ) + 1];
-			size_t sock_ind, open_ind;
-
-			// Pass only the opened sockets to the sleep function
-			open_ind = 0;
-			for( sock_ind = 0; sock_ind < ARRAY_COUNT( sockets ); sock_ind++ ) {
-				socket_t *sock = sockets[sock_ind];
-				if( sock->open ) {
-					opened_sockets[open_ind] = sock;
-					open_ind++;
-				}
-			}
-			opened_sockets[open_ind] = NULL;
-
-			NET_Sleep( sleeptime, opened_sockets );
+			TracyZoneScopedN( "WaitForSockets" );
+			TempAllocator temp = svs.frame_arena.temp();
+			WaitForSockets( &temp, &svs.socket, 1, sleeptime, WaitForSocketWriteable_No, NULL );
 		}
 	}
 
@@ -397,9 +323,9 @@ static void SV_CheckDefaultMap() {
 }
 
 void SV_Frame( unsigned realmsec, unsigned gamemsec ) {
-	ZoneScoped;
+	TracyZoneScoped;
 
-	TracyPlot( "Server frame arena max utilisation", svs.frame_arena.max_utilisation() );
+	TracyCPlot( "Server frame arena max utilisation", svs.frame_arena.max_utilisation() );
 	svs.frame_arena.clear();
 
 	u64 entropy[ 2 ];
@@ -449,35 +375,21 @@ void SV_Frame( unsigned realmsec, unsigned gamemsec ) {
 * into a more C friendly form.
 */
 void SV_UserinfoChanged( client_t *client ) {
-	char *val;
-
 	assert( client );
 	assert( Info_Validate( client->userinfo ) );
-
-	if( !client->edict || !( client->edict->s.svflags & SVF_FAKECLIENT ) ) {
-		// force the IP key/value pair so the game can filter based on ip
-		if( !Info_SetValueForKey( client->userinfo, "socket", NET_SocketTypeToString( client->netchan.socket->type ) ) ) {
-			SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Couldn't set userinfo (socket)\n" );
-			return;
-		}
-		if( !Info_SetValueForKey( client->userinfo, "ip", NET_AddressToString( &client->netchan.remoteAddress ) ) ) {
-			SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Couldn't set userinfo (ip)\n" );
-			return;
-		}
-	}
 
 	// call prog code to allow overrides
 	ClientUserinfoChanged( client->edict, client->userinfo );
 
 	if( !Info_Validate( client->userinfo ) ) {
-		SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Invalid userinfo (after game)" );
+		SV_DropClient( client, "%s", "Error: Invalid userinfo (after game)" );
 		return;
 	}
 
 	// we assume that game module deals with setting a correct name
-	val = Info_ValueForKey( client->userinfo, "name" );
+	char * val = Info_ValueForKey( client->userinfo, "name" );
 	if( !val || !val[0] ) {
-		SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: No name set" );
+		SV_DropClient( client, "%s", "Error: No name set" );
 		return;
 	}
 	Q_strncpyz( client->name, val, sizeof( client->name ) );
@@ -485,7 +397,7 @@ void SV_UserinfoChanged( client_t *client ) {
 }
 
 void SV_Init() {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	assert( !sv_initialized );
 
@@ -507,11 +419,7 @@ void SV_Init() {
 
 	NewCvar( "protocol", temp( "{}", APP_PROTOCOL_VERSION ), CvarFlag_ServerInfo | CvarFlag_ReadOnly );
 
-	sv_ip = NewCvar( "sv_ip", "", CvarFlag_Archive | CvarFlag_ServerReadOnly );
 	sv_port = NewCvar( "sv_port", temp( "{}", PORT_SERVER ), CvarFlag_Archive | CvarFlag_ServerReadOnly );
-
-	sv_ip6 = NewCvar( "sv_ip6", "::", CvarFlag_Archive | CvarFlag_ServerReadOnly );
-	sv_port6 = NewCvar( "sv_port6", temp( "{}", PORT_SERVER ), CvarFlag_Archive | CvarFlag_ServerReadOnly );
 
 	sv_downloadurl = NewCvar( "sv_downloadurl", "", CvarFlag_Archive | CvarFlag_ServerReadOnly );
 
@@ -519,7 +427,6 @@ void SV_Init() {
 	sv_hostname = NewCvar( "sv_hostname", APPLICATION " server", CvarFlag_ServerInfo | CvarFlag_Archive );
 	sv_timeout = NewCvar( "sv_timeout", "125", 0 );
 	sv_zombietime = NewCvar( "sv_zombietime", "2", 0 );
-	sv_showRcon = NewCvar( "sv_showRcon", "1", 0 );
 	sv_showChallenge = NewCvar( "sv_showChallenge", "0", 0 );
 	sv_showInfoQueries = NewCvar( "sv_showInfoQueries", "0", 0 );
 
@@ -538,12 +445,12 @@ void SV_Init() {
 		Cvar_ForceSet( "sv_maxclients", temp( "{}", MAX_CLIENTS ) );
 	}
 
-	sv_demodir = NewCvar( "sv_demodir", "", CvarFlag_ServerReadOnly );
+	sv_demodir = NewCvar( "sv_demodir", "server", CvarFlag_ServerReadOnly );
 
 	g_autorecord = NewCvar( "g_autorecord", is_dedicated_server ? "1" : "0", CvarFlag_Archive );
 	g_autorecord_maxdemos = NewCvar( "g_autorecord_maxdemos", "200", CvarFlag_Archive );
 
-	sv_debug_serverCmd = NewCvar( "sv_debug_serverCmd", "0", CvarFlag_Archive );
+	sv_debug_serverCmd = NewCvar( "sv_debug_serverCmd", "0", 0 );
 
 	// this is a message holder for shared use
 	MSG_Init( &tmpMessage, tmpMessageData, sizeof( tmpMessageData ) );
@@ -558,8 +465,6 @@ void SV_Init() {
 	//init the master servers list
 	SV_InitMaster();
 
-	SV_Web_Init();
-
 	sv_initialized = true;
 
 	if( is_dedicated_server ) {
@@ -568,14 +473,13 @@ void SV_Init() {
 }
 
 void SV_Shutdown( const char *finalmsg ) {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	if( !sv_initialized ) {
 		return;
 	}
 	sv_initialized = false;
 
-	SV_Web_Shutdown();
 	SV_ShutdownGame( finalmsg, false );
 
 	SV_ShutdownOperatorCommands();

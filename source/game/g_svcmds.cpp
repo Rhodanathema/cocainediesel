@@ -36,7 +36,7 @@ static void Cmd_ConsoleKick_f( const char * args, Span< Span< const char > > tok
 		return;
 	}
 
-	PF_DropClient( ent, DROP_TYPE_NORECONNECT, "Kicked" );
+	PF_DropClient( ent, "Kicked" );
 }
 
 void G_AddServerCommands() {

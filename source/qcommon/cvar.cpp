@@ -82,11 +82,12 @@ bool Cvar_Bool( const char * name ) {
 }
 
 void SetCvar( Cvar * cvar, const char * value ) {
+	cvar->modified = cvar->value == NULL || !StrEqual( value, cvar->value );
+
 	FREE( sys_allocator, cvar->value );
 	cvar->value = CopyString( sys_allocator, value );
 	cvar->number = SpanToFloat( MakeSpan( cvar->value ), 0.0f );
 	cvar->integer = Q_rint( cvar->number );
-	cvar->modified = true;
 
 	if( HasFlag( cvar->flags, CvarFlag_UserInfo ) ) {
 		userinfo_modified = true;
@@ -191,8 +192,7 @@ void ResetCheatCvars() {
 }
 
 Span< const char * > TabCompleteCvar( TempAllocator * a, const char * partial ) {
-	NonRAIIDynamicArray< const char * > results;
-	results.init( a );
+	NonRAIIDynamicArray< const char * > results( a );
 
 	for( size_t i = 0; i < cvars_hashtable.size(); i++ ) {
 		const Cvar * cvar = &cvars[ i ];
@@ -207,8 +207,7 @@ Span< const char * > TabCompleteCvar( TempAllocator * a, const char * partial ) 
 }
 
 Span< const char * > SearchCvars( Allocator * a, const char * partial ) {
-	NonRAIIDynamicArray< const char * > results;
-	results.init( a );
+	NonRAIIDynamicArray< const char * > results( a );
 
 	for( size_t i = 0; i < cvars_hashtable.size(); i++ ) {
 		const Cvar * cvar = &cvars[ i ];

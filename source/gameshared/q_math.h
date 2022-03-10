@@ -20,7 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #pragma once
 
-#include "gameshared/q_arch.h"
 #include "qcommon/types.h"
 
 //==============================================================
@@ -119,3 +118,5 @@ bool PlaneFrom3Points( Plane * plane, Vec3 a, Vec3 b, Vec3 c );
 bool Intersect3PlanesPoint( Vec3 * p, Plane plane1, Plane plane2, Plane plane3 );
 
 u32 Log2( u64 x );
+
+u16 Bswap( u16 x );

@@ -110,11 +110,6 @@ static void SV_SpawnServer( const char *mapname, bool devmap ) {
 * A brand new game has been started
 */
 void SV_InitGame() {
-	int i;
-	edict_t *ent;
-	netadr_t address, ipv6_address;
-	bool socket_opened = false;
-
 	// make sure the client is down
 	CL_Disconnect( NULL );
 
@@ -122,6 +117,8 @@ void SV_InitGame() {
 		// cause any connected clients to reconnect
 		SV_ShutdownGame( "Server restarted", true );
 	}
+
+	InitWebServer();
 
 	u64 entropy[ 2 ];
 	CSPRNG( entropy, sizeof( entropy ) );
@@ -142,50 +139,14 @@ void SV_InitGame() {
 	svs.client_entities.entities = ALLOC_MANY( sys_allocator, SyncEntityState, svs.client_entities.num_entities );
 	memset( svs.client_entities.entities, 0, sizeof( svs.client_entities.entities[ 0 ] ) * svs.client_entities.num_entities );
 
-	// init network stuff
-
-	address.type = NA_NOTRANSMIT;
-	ipv6_address.type = NA_NOTRANSMIT;
-
-	if( !is_dedicated_server ) {
-		NET_InitAddress( &address, NA_LOOPBACK );
-		if( !NET_OpenSocket( &svs.socket_loopback, SOCKET_LOOPBACK, &address, true ) ) {
-			Fatal( "Couldn't open loopback socket: %s\n", NET_ErrorString() );
-		}
-	}
-
 	if( is_dedicated_server || sv_maxclients->integer > 1 ) {
-		// IPv4
-		NET_StringToAddress( sv_ip->value, &address );
-		NET_SetAddressPort( &address, sv_port->integer );
-		if( !NET_OpenSocket( &svs.socket_udp, SOCKET_UDP, &address, true ) ) {
-			Com_Printf( "Error: Couldn't open UDP socket: %s\n", NET_ErrorString() );
-		} else {
-			socket_opened = true;
-		}
-
-		// IPv6
-		NET_StringToAddress( sv_ip6->value, &ipv6_address );
-		if( ipv6_address.type == NA_IPv6 ) {
-			NET_SetAddressPort( &ipv6_address, sv_port6->integer );
-			if( !NET_OpenSocket( &svs.socket_udp6, SOCKET_UDP, &ipv6_address, true ) ) {
-				Com_Printf( "Error: Couldn't open UDP6 socket: %s\n", NET_ErrorString() );
-			} else {
-				socket_opened = true;
-			}
-		} else {
-			Com_Printf( "Error: invalid IPv6 address: %s\n", sv_ip6->value );
-		}
-	}
-
-	if( is_dedicated_server && !socket_opened ) {
-		Fatal( "Couldn't open any socket\n" );
+		svs.socket = NewUDPServer( sv_port->integer, NonBlocking_Yes );
 	}
 
 	// init game
 	SV_InitGameProgs();
-	for( i = 0; i < sv_maxclients->integer; i++ ) {
-		ent = EDICT_NUM( i + 1 );
+	for( int i = 0; i < sv_maxclients->integer; i++ ) {
+		edict_t * ent = EDICT_NUM( i + 1 );
 		ent->s.number = i + 1;
 		svs.clients[i].edict = ent;
 	}
@@ -209,7 +170,7 @@ static void SV_FinalMessage( const char *message, bool reconnect ) {
 			if( reconnect ) {
 				SV_SendServerCommand( cl, "forcereconnect \"%s\"", message );
 			} else {
-				SV_SendServerCommand( cl, "disconnect %i \"%s\"", DROP_TYPE_GENERAL, message );
+				SV_SendServerCommand( cl, "disconnect \"%s\"", message );
 			}
 
 			SV_InitClientMessage( cl, &tmpMessage, NULL, 0 );
@@ -241,9 +202,7 @@ void SV_ShutdownGame( const char *finalmsg, bool reconnect ) {
 
 	SV_ShutdownGameProgs();
 
-	NET_CloseSocket( &svs.socket_loopback );
-	NET_CloseSocket( &svs.socket_udp );
-	NET_CloseSocket( &svs.socket_udp6 );
+	CloseSocket( svs.socket );
 
 	for( int i = 0; i < sv_maxclients->integer; i++ ) {
 		SNAP_FreeClientFrames( &svs.clients[ i ] );
@@ -257,6 +216,8 @@ void SV_ShutdownGame( const char *finalmsg, bool reconnect ) {
 		svs.cms = NULL;
 	}
 
+	ShutdownWebServer();
+
 	Com_SetServerState( ss_dead );
 	svs.initialized = false;
 }
@@ -266,7 +227,7 @@ void SV_ShutdownGame( const char *finalmsg, bool reconnect ) {
 * command from the console or progs.
 */
 void SV_Map( const char * map, bool devmap ) {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	if( svs.demo.file ) {
 		SV_Demo_Stop_f();
@@ -280,7 +241,7 @@ void SV_Map( const char * map, bool devmap ) {
 	for( int i = 0; i < sv_maxclients->integer; i++ ) {
 		client_t * cl = &svs.clients[ i ];
 		if( cl->state && cl->edict && ( cl->edict->s.svflags & SVF_FAKECLIENT ) ) {
-			SV_DropClient( cl, DROP_TYPE_GENERAL, NULL );
+			SV_DropClient( cl, NULL );
 		}
 	}
 

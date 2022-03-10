@@ -42,7 +42,7 @@ void SNAP_RecordDemoMessage( int demofile, msg_t *msg, int offset ) {
 	}
 
 	// now write the entire message to the file, prefixed by length
-	int len = LittleLong( msg->cursize ) - offset;
+	int len = msg->cursize - offset;
 	if( len <= 0 ) {
 		return;
 	}
@@ -54,8 +54,6 @@ void SNAP_RecordDemoMessage( int demofile, msg_t *msg, int offset ) {
 int SNAP_ReadDemoMessage( int demofile, msg_t *msg ) {
 	int msglen;
 	FS_Read( &msglen, 4, demofile );
-
-	msglen = LittleLong( msglen );
 	if( msglen == -1 ) {
 		return -1;
 	}
@@ -129,7 +127,7 @@ static void SNAP_RecordDemoMetaDataMessage( int demofile, msg_t *msg ) {
 	FS_Flush( demofile );
 }
 
-void SNAP_BeginDemoRecording( int demofile, unsigned int spawncount, unsigned int snapFrameTime,
+void SNAP_BeginDemoRecording( TempAllocator * temp, int demofile, unsigned int spawncount, unsigned int snapFrameTime,
 		const char *configstrings, SyncEntityState *baselines ) {
 	msg_t msg;
 	uint8_t msg_buffer[MAX_MSGLEN];
@@ -155,7 +153,7 @@ void SNAP_BeginDemoRecording( int demofile, unsigned int spawncount, unsigned in
 		const char *configstring = configstrings + i * MAX_CONFIGSTRING_CHARS;
 		if( configstring[0] ) {
 			MSG_WriteUint8( &msg, svc_servercs );
-			MSG_WriteString( &msg, va( "cs %i \"%s\"", i, configstring ) );
+			MSG_WriteString( &msg, ( *temp )( "cs {} \"{}\"", i, configstring ) );
 
 			DEMO_SAFEWRITE( demofile, &msg, false );
 		}
@@ -212,7 +210,7 @@ size_t SNAP_SetDemoMetaKeyValue( char *meta_data, size_t meta_data_max_size, siz
 }
 
 void SNAP_StopDemoRecording( int demofile ) {
-	int i = LittleLong( -1 );
+	int i = -1;
 	FS_Write( &i, 4, demofile );
 }
 

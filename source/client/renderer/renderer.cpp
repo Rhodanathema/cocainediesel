@@ -17,6 +17,8 @@
 #include "stb/stb_image.h"
 #include "stb/stb_image_write.h"
 
+#include "tracy/Tracy.hpp"
+
 FrameStatic frame_static;
 
 static Texture blue_noise;
@@ -54,7 +56,7 @@ static void TakeScreenshot() {
 		char * dir = temp( "{}/screenshots", HomeDirPath() );
 		DynamicString path( &temp, "{}/{}", dir, date );
 
-		if( strcmp( date, last_screenshot_date ) == 0 ) {
+		if( StrEqual( date, last_screenshot_date ) ) {
 			same_date_count++;
 			path.append( "_{}", same_date_count );
 		}
@@ -101,7 +103,7 @@ static ShadowParameters GetShadowParameters( ShadowQuality mode ) {
 }
 
 void InitRenderer() {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	InitRenderBackend();
 
@@ -177,7 +179,7 @@ static void DeleteFramebuffers() {
 }
 
 void ShutdownRenderer() {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	ShutdownModels();
 	ShutdownSkybox();
@@ -505,7 +507,7 @@ static Mat4 InverseScaleTranslation( Mat4 m ) {
 }
 
 void SetupShadowCascades() {
-	ZoneScoped;
+	TracyZoneScoped;
 	const float near_plane = 4.0f;
 	// const float cascade_dist[ 5 ] = { near_plane, 256.0f, 768.0f, 2304.0f, 6912.0f };
 	// const float cascade_dist[ 5 ] = { near_plane, 16.0f, 64.0f, 512.0f, 4096.0f };
@@ -662,7 +664,7 @@ void Draw2DBox( float x, float y, float w, float h, const Material * material, V
 }
 
 void Draw2DBoxUV( float x, float y, float w, float h, Vec2 topleft_uv, Vec2 bottomright_uv, const Material * material, Vec4 color ) {
-	if( w <= 0.0f || h <= 0.0f )
+	if( w <= 0.0f || h <= 0.0f || color.w <= 0.0f )
 		return;
 
 	RGBA8 rgba = LinearTosRGB( color );

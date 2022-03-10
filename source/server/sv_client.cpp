@@ -46,41 +46,19 @@ void SV_ClientResetCommandBuffers( client_t *client ) {
 	client->lastSentFrameNum = 0;
 }
 
-bool SV_ClientConnect( const socket_t *socket, const netadr_t *address, client_t *client, char *userinfo,
-					   u64 session_id, int challenge, bool fakeClient ) {
-	edict_t *ent;
-	int edictnum;
-
-	edictnum = ( client - svs.clients ) + 1;
-	ent = EDICT_NUM( edictnum );
+bool SV_ClientConnect( const NetAddress & address, client_t * client, char * userinfo, u64 session_id, int challenge, bool fakeClient ) {
+	int edictnum = ( client - svs.clients ) + 1;
+	edict_t * ent = EDICT_NUM( edictnum );
 
 	// get the game a chance to reject this connection or modify the userinfo
-	if( !ClientConnect( ent, userinfo, fakeClient ) ) {
+	if( !ClientConnect( ent, userinfo, address, fakeClient ) ) {
 		return false;
 	}
-
 
 	// the connection is accepted, set up the client slot
 	memset( client, 0, sizeof( *client ) );
 	client->edict = ent;
 	client->challenge = challenge; // save challenge for checksumming
-
-	if( socket ) {
-		switch( socket->type ) {
-			case SOCKET_UDP:
-			case SOCKET_LOOPBACK:
-				client->individual_socket = false;
-				client->socket.open = false;
-				break;
-
-			default:
-				assert( false );
-		}
-	} else {
-		assert( fakeClient );
-		client->individual_socket = false;
-		client->socket.open = false;
-	}
 
 	SV_ClientResetCommandBuffers( client );
 
@@ -92,13 +70,9 @@ bool SV_ClientConnect( const socket_t *socket, const netadr_t *address, client_t
 	client->state = CS_CONNECTING;
 
 	if( fakeClient ) {
-		client->netchan.remoteAddress.type = NA_NOTRANSMIT; // fake-clients can't transmit
+		client->netchan.remoteAddress = NULL_ADDRESS;
 	} else {
-		if( client->individual_socket ) {
-			Netchan_Setup( &client->netchan, &client->socket, address, session_id );
-		} else {
-			Netchan_Setup( &client->netchan, socket, address, session_id );
-		}
+		Netchan_Setup( &client->netchan, address, session_id );
 	}
 
 	// parse some info from the info strings
@@ -123,7 +97,7 @@ bool SV_ClientConnect( const socket_t *socket, const netadr_t *address, client_t
 * or unwillingly.  This is NOT called if the entire server is quiting
 * or crashing.
 */
-void SV_DropClient( client_t *drop, int type, const char *format, ... ) {
+void SV_DropClient( client_t *drop, const char *format, ... ) {
 	va_list argptr;
 	char *reason;
 	char string[1024];
@@ -144,11 +118,11 @@ void SV_DropClient( client_t *drop, int type, const char *format, ... ) {
 		SV_ClientResetCommandBuffers( drop ); // make sure everything is clean
 	} else {
 		SV_InitClientMessage( drop, &tmpMessage, NULL, 0 );
-		SV_SendServerCommand( drop, "disconnect %i \"%s\"", type, string );
+		SV_SendServerCommand( drop, "disconnect \"%s\"", string );
 		SV_AddReliableCommandsToMessage( drop, &tmpMessage );
 
 		SV_SendMessageToClient( drop, &tmpMessage );
-		Netchan_PushAllFragments( &drop->netchan );
+		Netchan_PushAllFragments( svs.socket, &drop->netchan );
 
 		if( drop->state >= CS_CONNECTED ) {
 			// call the prog function for removing a client
@@ -161,10 +135,6 @@ void SV_DropClient( client_t *drop, int type, const char *format, ... ) {
 	}
 
 	SNAP_FreeClientFrames( drop );
-
-	if( drop->individual_socket ) {
-		NET_CloseSocket( &drop->socket );
-	}
 
 	drop->state = CS_ZOMBIE;    // become free in a few seconds
 	drop->name[0] = 0;
@@ -186,8 +156,6 @@ CLIENT COMMAND EXECUTION
 * This will be sent on the initial connection and upon each server load.
 */
 static void SV_New_f( client_t * client, Span< Span< const char > > tokens ) {
-	Com_DPrintf( "New() from %s\n", client->name );
-
 	// if in CS_AWAITING we have sent the response packet the new once already,
 	// but client might have not got it so we send it again
 	if( client->state >= CS_SPAWNED ) {
@@ -225,7 +193,7 @@ static void SV_New_f( client_t * client, Span< Span< const char > > tokens ) {
 	SV_ClientResetCommandBuffers( client );
 
 	SV_SendMessageToClient( client, &tmpMessage );
-	Netchan_PushAllFragments( &client->netchan );
+	Netchan_PushAllFragments( svs.socket, &client->netchan );
 
 	// don't let it send reliable commands until we get the first configstring request
 	client->state = CS_CONNECTING;
@@ -233,10 +201,7 @@ static void SV_New_f( client_t * client, Span< Span< const char > > tokens ) {
 
 static void SV_Configstrings_f( client_t * client, Span< Span< const char > > tokens ) {
 	if( client->state == CS_CONNECTING ) {
-		Com_DPrintf( "Start Configstrings() from %s\n", client->name );
 		client->state = CS_CONNECTED;
-	} else {
-		Com_DPrintf( "Configstrings() from %s\n", client->name );
 	}
 
 	if( client->state != CS_CONNECTED ) {
@@ -274,8 +239,6 @@ static void SV_Configstrings_f( client_t * client, Span< Span< const char > > to
 }
 
 static void SV_Baselines_f( client_t * client, Span< Span< const char > > tokens ) {
-	Com_DPrintf( "Baselines() from %s\n", client->name );
-
 	if( client->state != CS_CONNECTED ) {
 		Com_Printf( "baselines not valid -- already spawned\n" );
 		return;
@@ -320,14 +283,12 @@ static void SV_Baselines_f( client_t * client, Span< Span< const char > > tokens
 }
 
 static void SV_Begin_f( client_t * client, Span< Span< const char > > tokens ) {
-	Com_DPrintf( "Begin() from %s\n", client->name );
-
 	// wsw : r1q2[start] : could be abused to respawn or cause spam/other mod-specific problems
 	if( client->state != CS_CONNECTED ) {
 		if( is_dedicated_server ) {
 			Com_Printf( "SV_Begin_f: 'Begin' from already spawned client: %s.\n", client->name );
 		}
-		SV_DropClient( client, DROP_TYPE_GENERAL, "Error: Begin while connected" );
+		SV_DropClient( client, "Error: Begin while connected" );
 		return;
 	}
 	// wsw : r1q2[end]
@@ -349,9 +310,8 @@ static void SV_Begin_f( client_t * client, Span< Span< const char > > tokens ) {
 //=============================================================================
 
 static void SV_Disconnect_f( client_t * client, Span< Span< const char > > tokens ) {
-	SV_DropClient( client, DROP_TYPE_GENERAL, NULL );
+	SV_DropClient( client, NULL );
 }
-
 
 static void SV_UserinfoCommand_f( client_t * client, Span< Span< const char > > tokens ) {
 	const char *info;
@@ -359,7 +319,7 @@ static void SV_UserinfoCommand_f( client_t * client, Span< Span< const char > > 
 
 	info = Cmd_Argv( 1 );
 	if( !Info_Validate( info ) ) {
-		SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Invalid userinfo" );
+		SV_DropClient( client, "%s", "Error: Invalid userinfo" );
 		return;
 	}
 
@@ -508,7 +468,7 @@ static void SV_ParseMoveCommand( client_t *client, msg_t *msg ) {
 	ucmdCount = (unsigned int)MSG_ReadUint8( msg );
 
 	if( ucmdCount > CMD_MASK ) {
-		SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Ucmd overflow" );
+		SV_DropClient( client, "%s", "Error: Ucmd overflow" );
 		return;
 	}
 
@@ -559,7 +519,7 @@ void SV_ParseClientMessage( client_t *client, msg_t *msg ) {
 		switch( c ) {
 			default:
 				Com_Printf( "SV_ParseClientMessage: unknown command char\n" );
-				SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Unknown command char" );
+				SV_DropClient( client, "%s", "Error: Unknown command char" );
 				return;
 
 			case clc_move: {
@@ -573,7 +533,7 @@ void SV_ParseClientMessage( client_t *client, msg_t *msg ) {
 			case clc_svcack: {
 				cmdNum = MSG_ReadIntBase128( msg );
 				if( cmdNum < client->reliableAcknowledge || cmdNum > client->reliableSent ) {
-					//SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: bad server command acknowledged" );
+					//SV_DropClient( client, "%s", "Error: bad server command acknowledged" );
 					return;
 				}
 				client->reliableAcknowledge = cmdNum;
@@ -597,7 +557,7 @@ void SV_ParseClientMessage( client_t *client, msg_t *msg ) {
 
 	if( msg->readcount > msg->cursize ) {
 		Com_Printf( "SV_ParseClientMessage: badread\n" );
-		SV_DropClient( client, DROP_TYPE_GENERAL, "%s", "Error: Bad message" );
+		SV_DropClient( client, "%s", "Error: Bad message" );
 		return;
 	}
 }

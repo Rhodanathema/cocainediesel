@@ -1,3 +1,5 @@
+#include <ctype.h>
+
 #include "client/client.h"
 #include "client/renderer/renderer.h"
 #include "qcommon/string.h"
@@ -63,10 +65,9 @@ void Con_ToggleConsole() {
 	}
 
 	if( console.visible ) {
-		CL_SetKeyDest( cls.old_key_dest );
+		CL_SetKeyDest( key_game );
 	}
 	else {
-		CL_SetOldKeyDest( cls.key_dest );
 		CL_SetKeyDest( key_ImGui );
 	}
 
@@ -82,7 +83,6 @@ bool Con_IsVisible() {
 
 void Con_Close() {
 	if( console.visible ) {
-		CL_SetKeyDest( cls.old_key_dest );
 		console.visible = false;
 	}
 }
@@ -258,7 +258,7 @@ static void Con_Execute() {
 
 	const HistoryEntry * last = &console.input_history[ ( console.history_head + console.history_count - 1 ) % ARRAY_COUNT( console.input_history ) ];
 
-	if( console.history_count == 0 || strcmp( last->cmd, console.input ) != 0 ) {
+	if( console.history_count == 0 || !StrEqual( last->cmd, console.input ) ) {
 		HistoryEntry * entry = &console.input_history[ ( console.history_head + console.history_count ) % ARRAY_COUNT( console.input_history ) ];
 		strcpy( entry->cmd, console.input );
 
@@ -306,7 +306,7 @@ void Con_Draw() {
 	{
 		ImGui::PushStyleColor( ImGuiCol_ChildBg, bg );
 		ImGui::PushStyleVar( ImGuiStyleVar_WindowPadding, ImVec2( 8, 4 ) );
-		ImGui::BeginChild( "consoletext", ImVec2( 0, frame_static.viewport_height * 0.4 - ImGui::GetFrameHeightWithSpacing() - 3 ), false, ImGuiWindowFlags_AlwaysUseWindowPadding );
+		ImGui::BeginChild( "consoletext", ImVec2( 0, frame_static.viewport_height * 0.4f - ImGui::GetFrameHeightWithSpacing() - 3 ), false, ImGuiWindowFlags_AlwaysUseWindowPadding );
 		{
 			Lock( console.log_mutex );
 			defer { Unlock( console.log_mutex ); };

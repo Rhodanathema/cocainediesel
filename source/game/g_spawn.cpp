@@ -58,8 +58,9 @@ static constexpr EntityField entity_keys[] = {
 	{ "targetname", FOFS( name ), EntityField_StringHash },
 	{ "pathtarget", FOFS( pathtarget ), EntityField_StringHash },
 	{ "killtarget", FOFS( killtarget ), EntityField_StringHash },
-	{ "wait", FOFS( wait ), EntityField_Float },
-	{ "delay", FOFS( delay ), EntityField_Float },
+	{ "deadcam", FOFS( deadcam ), EntityField_StringHash },
+	{ "wait", FOFS( wait ), EntityField_Int },
+	{ "delay", FOFS( delay ), EntityField_Int },
 	{ "style", FOFS( style ), EntityField_Int },
 	{ "count", FOFS( count ), EntityField_Int },
 	{ "health", FOFS( health ), EntityField_Float },
@@ -69,7 +70,7 @@ static constexpr EntityField entity_keys[] = {
 	{ "modelscale_vec", FOFS( s.scale ), EntityField_Vec3 },
 	{ "modelscale", FOFS( s.scale ), EntityField_Scale },
 	{ "mass", FOFS( mass ), EntityField_Int },
-	{ "random", FOFS( random ), EntityField_Float },
+	{ "random", FOFS( wait_randomness ), EntityField_Int },
 
 	// temp spawn vars -- only valid when the spawn function is called
 	{ "lip", STOFS( lip ), EntityField_Int, true },
@@ -85,17 +86,18 @@ static constexpr EntityField entity_keys[] = {
 	{ "spawn_probability", STOFS( spawn_probability ), EntityField_Float, true },
 };
 
-static void SP_worldspawn( edict_t * ent );
+static void SP_worldspawn( edict_t * ent, const spawn_temp_t * st );
 
 struct EntitySpawnCallback {
 	StringHash classname;
-	void ( *cb )( edict_t * ent );
+	void ( *cb )( edict_t * ent, const spawn_temp_t * st );
 };
 
 static constexpr EntitySpawnCallback spawn_callbacks[] = {
 	{ "worldspawn", SP_worldspawn },
 
 	{ "post_match_camera", SP_post_match_camera },
+	{ "deadcam", SP_post_match_camera },
 
 	{ "func_door", SP_func_door },
 	{ "func_door_rotating", SP_func_door_rotating },
@@ -124,14 +126,15 @@ static constexpr EntitySpawnCallback spawn_callbacks[] = {
 
 	{ "spike", SP_spike },
 	{ "spikes", SP_spikes },
+	{ "jumppad", SP_jumppad },
 
 	{ "speaker_wall", SP_speaker_wall },
 };
 
-static bool SpawnEntity( edict_t * ent ) {
+static bool SpawnEntity( edict_t * ent, const spawn_temp_t * st ) {
 	for( EntitySpawnCallback s : spawn_callbacks ) {
 		if( s.classname == ent->classname ) {
-			s.cb( ent );
+			s.cb( ent, st );
 			return true;
 		}
 	}
@@ -140,12 +143,12 @@ static bool SpawnEntity( edict_t * ent ) {
 		return true;
 	}
 
-	Com_GGPrint( "{} doesn't have a spawn function", st.classname );
+	Com_GGPrint( "{} doesn't have a spawn function", st->classname );
 
 	return false;
 }
 
-static void ED_ParseField( Span< const char > key, Span< const char > value, edict_t * ent ) {
+static void ED_ParseField( Span< const char > key, Span< const char > value, edict_t * ent, spawn_temp_t * st ) {
 	StringHash key_hash = StringHash( key );
 
 	for( EntityField f : entity_keys ) {
@@ -154,7 +157,7 @@ static void ED_ParseField( Span< const char > key, Span< const char > value, edi
 
 		uint8_t *b;
 		if( f.temp ) {
-			b = (uint8_t *)&st;
+			b = (uint8_t *)st;
 		} else {
 			b = (uint8_t *)ent;
 		}
@@ -204,15 +207,12 @@ static void ED_ParseField( Span< const char > key, Span< const char > value, edi
 		return;
 	}
 
-	if( developer->integer ) {
+	if( key.n > 0 && key[ 0 ] != '_' ) {
 		Com_GGPrint( "{} is not a field", key );
 	}
 }
 
-static void ED_ParseEntity( Span< const char > * cursor, edict_t * ent ) {
-	memset( &st, 0, sizeof( st ) );
-	st.spawn_probability = 1.0f;
-
+static void ED_ParseEntity( Span< const char > * cursor, edict_t * ent, spawn_temp_t * st ) {
 	while( true ) {
 		Span< const char > key = ParseToken( cursor, Parse_DontStopOnNewLine );
 		if( key == "}" )
@@ -229,10 +229,10 @@ static void ED_ParseEntity( Span< const char > * cursor, edict_t * ent ) {
 			Com_Error( "ED_ParseEntity: closing brace without data" );
 		}
 
-		ED_ParseField( key, value, ent );
+		ED_ParseField( key, value, ent, st );
 
 		if( StrCaseEqual( key, "classname" ) ) {
-			st.classname = value;
+			st->classname = value;
 		}
 	}
 }
@@ -277,13 +277,16 @@ static void SpawnMapEntities() {
 			ent = G_Spawn();
 		}
 
-		ED_ParseEntity( &cursor, ent );
+		spawn_temp_t st = { };
+		st.spawn_probability = 1.0f;
+
+		ED_ParseEntity( &cursor, ent, &st );
 
 		bool ok = true;
 		bool rng = Probability( &svs.rng, st.spawn_probability );
 		ok = ok && st.classname != "";
 		ok = ok && rng;
-		ok = ok && SpawnEntity( ent );
+		ok = ok && SpawnEntity( ent, &st );
 
 		if( !ok ) {
 			G_FreeEdict( ent );
@@ -301,8 +304,6 @@ static void SpawnMapEntities() {
 * parsing textual entity definitions out of an ent file.
 */
 void G_InitLevel( const char *mapname, int64_t levelTime ) {
-	TempAllocator temp = svs.frame_arena.temp();
-
 	GClip_ClearWorld(); // clear areas links
 
 	memset( &level, 0, sizeof( level_locals_t ) );
@@ -310,8 +311,7 @@ void G_InitLevel( const char *mapname, int64_t levelTime ) {
 
 	memset( &server_gs.gameState, 0, sizeof( server_gs.gameState ) );
 
-	const char * path = temp( "maps/{}", mapname );
-	server_gs.gameState.map = StringHash( path );
+	server_gs.gameState.map = StringHash( mapname );
 	server_gs.gameState.map_checksum = svs.cms->checksum;
 
 	G_FreeEntities();
@@ -385,8 +385,6 @@ void G_LoadMap( const char * name ) {
 
 	Q_strncpyz( sv.mapname, name, sizeof( sv.mapname ) );
 
-	const char * base_path = temp( "maps/{}", name );
-
 	Span< u8 > data;
 	defer { FREE( sys_allocator, data.ptr ); };
 
@@ -407,11 +405,11 @@ void G_LoadMap( const char * name ) {
 		}
 	}
 
-	u64 base_hash = Hash64( base_path );
-	svs.cms = CM_LoadMap( CM_Server, data, base_hash );
+	u64 hash = Hash64( name );
+	svs.cms = CM_LoadMap( CM_Server, data, hash );
 	svs.ent_string_checksum = Hash64( CM_EntityString( svs.cms ), CM_EntityStringLen( svs.cms ) );
 
-	server_gs.gameState.map = StringHash( base_hash );
+	server_gs.gameState.map = StringHash( hash );
 	server_gs.gameState.map_checksum = svs.cms->checksum;
 }
 
@@ -438,7 +436,7 @@ void G_Aasdf() {
 	}
 }
 
-static void SP_worldspawn( edict_t *ent ) {
+static void SP_worldspawn( edict_t * ent, const spawn_temp_t * st ) {
 	ent->movetype = MOVETYPE_PUSH;
 	ent->r.solid = SOLID_YES;
 	ent->r.inuse = true; // since the world doesn't use G_Spawn()

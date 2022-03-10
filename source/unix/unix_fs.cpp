@@ -6,6 +6,7 @@
 #include "qcommon/hash.h"
 #include "qcommon/hashtable.h"
 #include "qcommon/string.h"
+#include "gameshared/q_shared.h"
 
 // these must come after qcommon because both tracy and one of these defines BLOCK_SIZE
 #include <dirent.h>
@@ -33,8 +34,7 @@ char * FindHomeDirectory( Allocator * a ) {
 }
 
 char * GetExePath( Allocator * a ) {
-	NonRAIIDynamicArray< char > buf;
-	buf.init( a );
+	NonRAIIDynamicArray< char > buf( a );
 	buf.resize( 1024 );
 
 	while( true ) {
@@ -112,7 +112,7 @@ bool ListDirNext( ListDirHandle * opaque, const char ** path, bool * dir ) {
 
 	dirent64 * dirent;
 	while( ( dirent = readdir64( handle.dir ) ) != NULL ) {
-		if( strcmp( dirent->d_name, "." ) == 0 || strcmp( dirent->d_name, ".." ) == 0 )
+		if( StrEqual( dirent->d_name, "." ) || StrEqual( dirent->d_name, ".." ) )
 			continue;
 
 		*path = dirent->d_name;

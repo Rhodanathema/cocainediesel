@@ -14,13 +14,16 @@
 static Texture atlas_texture;
 static Material atlas_material;
 
-static ImFont * AddFontAsset( StringHash path, float pixel_size ) {
+static ImFont * AddFontAsset( StringHash path, float pixel_size, bool idi_nahui = false ) {
 	Span< const u8 > data = AssetBinary( path );
 	ImFontConfig config;
 	config.FontData = ( void * ) data.ptr;
 	config.FontDataOwnedByAtlas = false;
 	config.FontDataSize = data.n;
 	config.SizePixels = pixel_size;
+	if( idi_nahui ) {
+		config.GlyphRanges = ImGui::GetIO().Fonts->GetGlyphRangesCyrillic();
+	}
 	return ImGui::GetIO().Fonts->AddFont( &config );
 }
 
@@ -68,6 +71,7 @@ void CL_InitImGui() {
 		cls.medium_font = AddFontAsset( "fonts/Decalotype-Black.ttf", 28.0f );
 		cls.medium_italic_font = AddFontAsset( "fonts/Decalotype-BlackItalic.ttf", 28.0f );
 		cls.console_font = AddFontAsset( "fonts/Decalotype-Bold.ttf", 14.0f );
+		cls.idi_nahui_font = AddFontAsset( "fonts/OpenSans-SemiBold.ttf", 24.0f, true );
 
 		io.Fonts->Build();
 
@@ -138,7 +142,7 @@ void CL_ShutdownImGui() {
 }
 
 static void SubmitDrawCalls() {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	ImDrawData * draw_data = ImGui::GetDrawData();
 
@@ -221,14 +225,14 @@ static void SubmitDrawCalls() {
 }
 
 void CL_ImGuiBeginFrame() {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 }
 
 void CL_ImGuiEndFrame() {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	// ImGui::ShowDemoWindow();
 
@@ -271,6 +275,16 @@ void format( FormatBuffer * fb, const ImGuiColorToken & token, const FormatOpts 
 	format( fb, ( const char * ) token.token );
 }
 
+void CellCenter( float item_width ) {
+	float cell_width = ImGui::GetContentRegionAvail().x;
+	ImGui::SetCursorPosX( ImGui::GetCursorPosX() + 0.5f * ( cell_width - item_width ) );
+}
+
+void CellCenterText( const char * str ) {
+	CellCenter( ImGui::CalcTextSize( str ).x );
+	ImGui::Text( "%s", str );
+}
+
 void ColumnCenterText( const char * str ) {
 	float width = ImGui::CalcTextSize( str ).x;
 	ImGui::SetCursorPosX( ImGui::GetColumnOffset() + 0.5f * ( ImGui::GetColumnWidth() - width ) );
@@ -289,12 +303,15 @@ void WindowCenterTextXY( const char * str ) {
 	ImGui::Text( "%s", str );
 }
 
+Vec4 CustomAttentionGettingColor( Vec4 from, Vec4 to, float div ) {
+	float t = sinf( cls.monotonicTime / div ) * 0.5f + 1.0f;
+	return Lerp( from, t, to );
+}
+
 Vec4 AttentionGettingColor() {
-	float t = sinf( cls.monotonicTime / 20.0f ) * 0.5f + 1.0f;
-	return Lerp( vec4_red, t, sRGBToLinear( rgba8_diesel_yellow ) );
+	return CustomAttentionGettingColor( vec4_red, sRGBToLinear( rgba8_diesel_yellow ), 20.0f );
 }
 
 Vec4 PlantableColor() {
-	float t = sinf( cls.monotonicTime / 20.0f ) * 0.5f + 1.0f;
-	return Lerp( vec4_dark, t, sRGBToLinear( rgba8_diesel_green ) );
+	return CustomAttentionGettingColor( vec4_dark, sRGBToLinear( rgba8_diesel_green ), 20.0f );
 }

@@ -34,7 +34,6 @@ static bool com_quit;
 
 static jmp_buf abortframe;     // an ERR_DROP occured, exit the entire frame
 
-Cvar *developer;
 Cvar *timescale;
 
 static Cvar *logconsole = NULL;
@@ -173,7 +172,7 @@ void Com_Printf( const char *format, ... ) {
 
 	Con_Print( msg );
 
-	TracyMessage( msg, strlen( msg ) );
+	TracyCMessage( msg, strlen( msg ) );
 
 	if( log_file != NULL ) {
 		if( logconsole_timestamp && logconsole_timestamp->integer ) {
@@ -186,26 +185,6 @@ void Com_Printf( const char *format, ... ) {
 			fflush( log_file );
 		}
 	}
-}
-
-/*
-* Com_DPrintf
-*
-* A Com_Printf that only shows up if the "developer" cvar is set
-*/
-void Com_DPrintf( const char *format, ... ) {
-	va_list argptr;
-	char msg[MAX_PRINTMSG];
-
-	if( !developer || !developer->integer ) {
-		return; // don't confuse non-developers with techie stuff...
-
-	}
-	va_start( argptr, format );
-	vsnprintf( msg, sizeof( msg ), format, argptr );
-	va_end( argptr );
-
-	Com_Printf( "%s", msg );
 }
 
 /*
@@ -260,7 +239,7 @@ void Key_Init();
 void Key_Shutdown();
 
 void Qcommon_Init( int argc, char ** argv ) {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	if( !is_public_build ) {
 		EnableFPE();
@@ -272,17 +251,18 @@ void Qcommon_Init( int argc, char ** argv ) {
 
 	InitFS();
 	FS_Init();
-
 	Cmd_Init();
 	Cvar_Init();
 	Key_Init(); // need to be able to bind keys before running configs
-
-	developer = NewCvar( "developer", "0", 0 );
 
 	if( !is_dedicated_server ) {
 		ExecDefaultCfg();
 		Cmd_Execute( "exec config.cfg" );
 		Cmd_Execute( "exec autoexec.cfg" );
+		if( is_public_build ) {
+			Cmd_Execute( "execold config.cfg" );
+			Cmd_Execute( "execold autoexec.cfg" );
+		}
 	}
 	else {
 		Cmd_Execute( "config dedicated_autoexec.cfg" );
@@ -293,21 +273,16 @@ void Qcommon_Init( int argc, char ** argv ) {
 	AddCommand( "quit", Com_DeferQuit );
 
 	timescale = NewCvar( "timescale", "1.0", CvarFlag_Cheat );
-	if( is_dedicated_server ) {
-		logconsole = NewCvar( "logconsole", "server.log", CvarFlag_Archive );
-	}
-	else {
-		logconsole = NewCvar( "logconsole", "", CvarFlag_Archive );
-	}
+	logconsole = NewCvar( "logconsole", is_dedicated_server ? "server.log" : "", CvarFlag_Archive );
 	logconsole_append = NewCvar( "logconsole_append", "1", CvarFlag_Archive );
-	logconsole_flush =  NewCvar( "logconsole_flush", "0", CvarFlag_Archive );
-	logconsole_timestamp =  NewCvar( "logconsole_timestamp", "0", CvarFlag_Archive );
+	logconsole_flush = NewCvar( "logconsole_flush", "0", CvarFlag_Archive );
+	logconsole_timestamp = NewCvar( "logconsole_timestamp", "0", CvarFlag_Archive );
 
 	NewCvar( "gamename", APPLICATION_NOSPACES, CvarFlag_ServerInfo | CvarFlag_ReadOnly );
 
 	InitCSPRNG();
 
-	NET_Init();
+	InitNetworking();
 	Netchan_Init();
 
 	InitMapList();
@@ -319,7 +294,7 @@ void Qcommon_Init( int argc, char ** argv ) {
 }
 
 bool Qcommon_Frame( unsigned int realMsec ) {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	static unsigned int gameMsec;
 
@@ -357,7 +332,7 @@ bool Qcommon_Frame( unsigned int realMsec ) {
 }
 
 void Qcommon_Shutdown() {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	SV_Shutdown( "Server quit\n" );
 	CL_Shutdown();
@@ -365,7 +340,7 @@ void Qcommon_Shutdown() {
 	ShutdownMapList();
 
 	Netchan_Shutdown();
-	NET_Shutdown();
+	ShutdownNetworking();
 	Key_Shutdown();
 
 	RemoveCommand( "quit" );

@@ -23,7 +23,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 game_locals_t game;
 gs_state_t server_gs;
 level_locals_t level;
-spawn_temp_t st;
 
 DamageType meansOfDeath;
 Vec3 knockbackOfDeath;
@@ -32,8 +31,6 @@ int damageFlagsOfDeath;
 Cvar *sv_password;
 Cvar *g_operator_password;
 Cvar *g_select_empty;
-
-Cvar *filterban;
 
 Cvar *g_maxvelocity;
 
@@ -129,7 +126,6 @@ void G_Init( unsigned int framemsec ) {
 
 	sv_password = NewCvar( "sv_password", "", 0 );
 	g_operator_password = NewCvar( "g_operator_password", "", CvarFlag_Archive );
-	filterban = NewCvar( "filterban", "1", 0 );
 
 	g_projectile_prestep = NewCvar( "g_projectile_prestep", temp( "{}", PROJECTILE_PRESTEP ), CvarFlag_Developer );
 	g_numbots = NewCvar( "g_numbots", "0", CvarFlag_Archive );

@@ -181,7 +181,22 @@ static void Cmd_Exec_f() {
 		return;
 	}
 
-	DynamicString path( sys_allocator, "{}/base/{}", HomeDirPath(), Cmd_Argv( 1 ) );
+	const char * fmt = is_public_build ? "{}/{}" : "{}/base/{}";
+	DynamicString path( sys_allocator, fmt, HomeDirPath(), Cmd_Argv( 1 ) );
+	if( FileExtension( path.c_str() ) == "" ) {
+		path += ".cfg";
+	}
+
+	ExecConfig( path.c_str() );
+}
+
+static void Cmd_ExecOld_f() {
+	if( Cmd_Argc() < 2 ) {
+		Com_Printf( "Usage: execold <filename>\n" );
+		return;
+	}
+
+	DynamicString path( sys_allocator, "{}/base/{}", OldHomeDirPath(), Cmd_Argv( 1 ) );
 	if( FileExtension( path.c_str() ) == "" ) {
 		path += ".cfg";
 	}
@@ -276,8 +291,7 @@ void SetTabCompletionCallback( const char * name, TabCompletionCallback callback
 }
 
 Span< const char * > TabCompleteCommand( TempAllocator * a, const char * partial ) {
-	NonRAIIDynamicArray< const char * > results;
-	results.init( a );
+	NonRAIIDynamicArray< const char * > results( a );
 
 	for( size_t i = 0; i < commands_hashtable.size(); i++ ) {
 		const ConsoleCommand * command = &commands[ i ];
@@ -292,8 +306,7 @@ Span< const char * > TabCompleteCommand( TempAllocator * a, const char * partial
 }
 
 Span< const char * > SearchCommands( Allocator * a, const char * partial ) {
-	NonRAIIDynamicArray< const char * > results;
-	results.init( a );
+	NonRAIIDynamicArray< const char * > results( a );
 
 	for( size_t i = 0; i < commands_hashtable.size(); i++ ) {
 		const ConsoleCommand * command = &commands[ i ];
@@ -350,9 +363,7 @@ static void FindMatchingFilesRecursive( TempAllocator * a, NonRAIIDynamicArray< 
 Span< const char * > TabCompleteFilename( TempAllocator * a, const char * partial, const char * search_dir, const char * extension ) {
 	DynamicString base_path( sys_allocator, "{}", search_dir );
 
-	NonRAIIDynamicArray< const char * > results;
-	results.init( a );
-
+	NonRAIIDynamicArray< const char * > results( a );
 	FindMatchingFilesRecursive( a, &results, &base_path, partial, base_path.length() + 1, extension );
 
 	std::sort( results.begin(), results.end(), SortCStringsComparator );
@@ -375,6 +386,7 @@ static Span< const char * > TabCompleteConfig( TempAllocator * a, const char * p
 
 void Cmd_Init() {
 	AddCommand( "exec", Cmd_Exec_f );
+	AddCommand( "execold", Cmd_ExecOld_f );
 	AddCommand( "config", Cmd_Config_f );
 	AddCommand( "find", Cmd_Find_f );
 
@@ -384,6 +396,7 @@ void Cmd_Init() {
 
 void Cmd_Shutdown() {
 	RemoveCommand( "exec" );
+	RemoveCommand( "execold" );
 	RemoveCommand( "config" );
 	RemoveCommand( "find" );
 

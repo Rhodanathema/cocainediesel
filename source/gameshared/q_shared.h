@@ -20,14 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #pragma once
 
-#include "gameshared/q_arch.h"
 #include "qcommon/base.h"
-
-//==============================================
-
-// little endian
-#define LittleLong( l ) ( l )
-#define LittleFloat( l ) ( l )
 
 //==============================================================
 //
@@ -49,11 +42,11 @@ Span< const char > ParseToken( Span< const char > * cursor, ParseStopOnNewLine s
 
 bool TrySpanToInt( Span< const char > str, int * x );
 bool TrySpanToFloat( Span< const char > str, float * x );
-bool TryStringToU64( const char * str, u64 * x );
+bool TrySpanToU64( Span< const char > str, u64 * x );
 
 int SpanToInt( Span< const char > token, int def );
 float SpanToFloat( Span< const char > token, float def );
-u64 StringToU64( const char * str, u64 def );
+u64 SpanToU64( Span< const char > str, u64 def );
 
 int ParseInt( Span< const char > * cursor, int def, ParseStopOnNewLine stop );
 float ParseFloat( Span< const char > * cursor, float def, ParseStopOnNewLine stop );
@@ -84,12 +77,15 @@ bool EndsWith( const char * str, const char * suffix );
 
 bool CaseStartsWith( const char * str, const char * prefix );
 
+Span< const char > StripPrefix( Span< const char > str, const char * prefix );
+
 bool CaseContains( const char * haystack, const char * needle );
 
 Span< const char > FileExtension( Span< const char > path );
 Span< const char > FileExtension( const char * path );
 Span< const char > StripExtension( Span< const char > path );
 Span< const char > StripExtension( const char * path );
+Span< const char > FileName( Span< const char > path );
 Span< const char > FileName( const char * path );
 Span< const char > BasePath( const char * path );
 
@@ -133,7 +129,6 @@ STATIC_ASSERT( MAX_NAME_CHARS <= MAX_CONFIGSTRING_CHARS );
 void Q_strncpyz( char *dest, const char *src, size_t size );
 void Q_strncatz( char *dest, const char *src, size_t size );
 
-char *Q_strupr( char *s );
 char *Q_strlwr( char *s );
 char *Q_trim( char *s );
 void RemoveTrailingZeroesFloat( char * str );
@@ -143,12 +138,6 @@ void RemoveTrailingZeroesFloat( char * str );
  * total (untruncated) length of the resulting string.
  */
 size_t Q_urldecode( const char *src, char *dst, size_t dst_size );
-
-#ifndef _MSC_VER
-char *va( const char *format, ... ) __attribute__( ( format( printf, 1, 2 ) ) );
-#else
-char *va( _Printf_format_string_ const char *format, ... );
-#endif
 
 //
 // key / value info strings

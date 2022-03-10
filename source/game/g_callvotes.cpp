@@ -113,7 +113,7 @@ static bool G_VoteMapValidate( callvotedata_t *data, bool first ) {
 	Q_strncpyz( mapname, data->argv[0], sizeof( mapname ) );
 	COM_SanitizeFilePath( mapname );
 
-	if( !Q_stricmp( sv.mapname, mapname ) ) {
+	if( StrCaseEqual( sv.mapname, mapname ) ) {
 		G_PrintMsg( data->caller, "%sYou are already on that map\n", S_COLOR_RED );
 		return false;
 	}
@@ -299,68 +299,9 @@ static void G_VoteKickPassed( callvotedata_t *vote ) {
 		return;
 	}
 
-	PF_DropClient( ent, DROP_TYPE_NORECONNECT, "Kicked" );
+	PF_DropClient( ent, "Kicked" );
 }
 
-
-/*
-* kickban
-*/
-
-static void G_VoteKickBanExtraHelp( edict_t * ent, String< MAX_STRING_CHARS > * msg ) {
-	ListPlayersExcept( ent, msg, true );
-}
-
-static bool G_VoteKickBanValidate( callvotedata_t *vote, bool first ) {
-	int who = -1;
-
-	if( !filterban->integer ) {
-		G_PrintMsg( vote->caller, "%sFilterban is disabled on this server\n", S_COLOR_RED );
-		return false;
-	}
-
-	if( first ) {
-		edict_t *tokick = G_PlayerForText( vote->argv[0] );
-
-		if( tokick ) {
-			who = PLAYERNUM( tokick );
-		} else {
-			who = -1;
-		}
-
-		if( who != -1 ) {
-			if( game.edicts[who + 1].r.client->isoperator ) {
-				G_PrintMsg( vote->caller, S_COLOR_RED "%s is a game operator.\n", game.edicts[who + 1].r.client->netname );
-				return false;
-			}
-
-			// we save the player id to be kicked, so we don't later get
-			// confused by new ids or players changing names
-			vote->target = who;
-		} else {
-			G_PrintMsg( vote->caller, "%sNo such player\n", S_COLOR_RED );
-			return false;
-		}
-	} else {
-		who = vote->target;
-	}
-
-	if( !game.edicts[who + 1].r.inuse )
-		return false;
-
-	vote->string.format( "{}", game.edicts[who + 1].r.client->netname );
-	return true;
-}
-
-static void G_VoteKickBanPassed( callvotedata_t *vote ) {
-	edict_t * ent = &game.edicts[vote->target + 1];
-	if( !ent->r.inuse || !ent->r.client ) { // may have disconnected along the callvote time
-		return;
-	}
-
-	Cmd_Execute( "addip {} {}", ent->r.client->ip, 15 );
-	PF_DropClient( ent, DROP_TYPE_NORECONNECT, "Kicked" );
-}
 
 /*
 * timeout
@@ -454,17 +395,6 @@ static callvotetype_t votes[] = {
 		G_VoteKickExtraHelp,
 		"<player>",
 		"Removes player from the server",
-	},
-
-	{
-		"kickban",
-		1,
-		G_VoteKickBanValidate,
-		G_VoteKickBanPassed,
-		NULL,
-		G_VoteKickBanExtraHelp,
-		"<player>",
-		"Removes player from the server and bans his IP-address for 15 minutes",
 	},
 
 	{
@@ -674,10 +604,10 @@ void G_CallVotes_CmdVote( edict_t *ent ) {
 	}
 
 	vote = Cmd_Argv( 1 );
-	if( !Q_stricmp( vote, "yes" ) ) {
+	if( StrCaseEqual( vote, "yes" ) ) {
 		vote_id = VOTED_YES;
 	}
-	else if( !Q_stricmp( vote, "no" ) ) {
+	else if( StrCaseEqual( vote, "no" ) ) {
 		vote_id = VOTED_NO;
 	}
 	else {
@@ -826,15 +756,15 @@ void G_OperatorVote_Cmd( edict_t *ent ) {
 		return;
 	}
 
-	if( !Q_stricmp( Cmd_Argv( 1 ), "help" ) ) {
+	if( StrCaseEqual( Cmd_Argv( 1 ), "help" ) ) {
 		G_PrintMsg( ent, "Opcall can be used with all callvotes and the following commands:\n" );
 		G_PrintMsg( ent, "-help\n - passvote\n- cancelvote\n- putteam\n" );
 		return;
 	}
 
-	if( !Q_stricmp( Cmd_Argv( 1 ), "cancelvote" ) ) {
+	if( StrCaseEqual( Cmd_Argv( 1 ), "cancelvote" ) ) {
 		forceVote = VOTED_NO;
-	} else if( !Q_stricmp( Cmd_Argv( 1 ), "passvote" ) ) {
+	} else if( StrCaseEqual( Cmd_Argv( 1 ), "passvote" ) ) {
 		forceVote = VOTED_YES;
 	} else {
 		forceVote = VOTED_NOTHING;
@@ -862,7 +792,7 @@ void G_OperatorVote_Cmd( edict_t *ent ) {
 		return;
 	}
 
-	if( !Q_stricmp( Cmd_Argv( 1 ), "putteam" ) ) {
+	if( StrCaseEqual( Cmd_Argv( 1 ), "putteam" ) ) {
 		const char *splayer = Cmd_Argv( 2 );
 		const char *steam = Cmd_Argv( 3 );
 		edict_t *playerEnt;

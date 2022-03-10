@@ -10,6 +10,7 @@
 #include "qcommon/qfiles.h"
 #include "qcommon/span2d.h"
 #include "qcommon/string.h"
+#include "qcommon/hash.h"
 #include "gameshared/q_math.h"
 #include "gameshared/q_shared.h"
 
@@ -264,6 +265,7 @@ static Span< const char > ParseVec3( Vec3 * v, Span< const char > str ) {
 struct Face {
 	Vec3 plane[ 3 ];
 	Span< const char > material;
+	u64 material_hash;
 	Mat3 texcoords_transform;
 };
 
@@ -285,6 +287,7 @@ struct ControlPoint {
 
 struct Patch {
 	Span< const char > material;
+	u64 material_hash;
 	int w, h;
 	ControlPoint control_points[ 1024 ];
 };
@@ -316,6 +319,9 @@ static Span< const char > SkipFlags( Span< const char > str ) {
 static Span< const char > ParseQ1Face( Face * face, Span< const char > str ) {
 	str = ParsePlane( face->plane, str );
 	str = ParseWord( &face->material, str );
+
+	constexpr StringHash base_hash = "textures/";
+	face->material_hash = Hash64( face->material.ptr, face->material.num_bytes(), base_hash.hash );
 
 	float u, v, angle, scale_x, scale_y;
 	str = ParseFloat( &u, str );
@@ -355,6 +361,8 @@ static Span< const char > ParseQ3Face( Face * face, Span< const char > str ) {
 	);
 
 	str = ParseWord( &face->material, str );
+	constexpr u64 base_hash = Hash64_CT( "textures/", 9 );
+	face->material_hash = Hash64( face->material.ptr, face->material.num_bytes(), base_hash );
 	str = SkipFlags( str );
 
 	return str;
@@ -379,6 +387,8 @@ static Span< const char > ParsePatch( Patch * patch, Span< const char > str ) {
 	str = SkipToken( str, "{" );
 
 	str = ParseWord( &patch->material, str );
+	constexpr u64 base_hash = Hash64_CT( "textures/", 9 );
+	patch->material_hash = Hash64( patch->material.ptr, patch->material.num_bytes(), base_hash );
 
 	str = SkipToken( str, "(" );
 
@@ -446,7 +456,7 @@ static Span< const char > ParseKeyValue( KeyValue * kv, Span< const char > str )
 }
 
 static Span< const char > ParseEntity( Entity * entity, Span< const char > str ) {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	str = SkipToken( str, "{" );
 
@@ -516,7 +526,7 @@ static void format( FormatBuffer * fb, const Plane & plane, const FormatOpts & o
 	ggformat_impl( fb, "{.5}.X = {.1}", plane.normal, plane.distance );
 }
 
-static u32 AddMaterial( BSP * bsp, Span< const char > name ) {
+static u32 AddMaterial( BSP * bsp, Span< const char > name, u64 hash ) {
 	for( size_t i = 0; i < bsp->materials->size(); i++ ) {
 		if( StrEqual( name, ( *bsp->materials )[ i ].name ) ) {
 			return i;
@@ -524,7 +534,7 @@ static u32 AddMaterial( BSP * bsp, Span< const char > name ) {
 	}
 
 	BSPMaterial material = { };
-	GetMaterialFlags( name, &material.surface_flags, &material.content_flags );
+	GetMaterialFlags( hash, &material.surface_flags, &material.content_flags );
 	assert( name.n + 1 < sizeof( material.name ) );
 	memcpy( material.name, name.ptr, name.n );
 	return bsp->materials->add( material );
@@ -532,19 +542,21 @@ static u32 AddMaterial( BSP * bsp, Span< const char > name ) {
 
 struct MaterialMesh {
 	Span< const char > material; // TODO: u32?
+	u64 material_hash;
 	NonRAIIDynamicArray< BSPVertex > vertices;
 	NonRAIIDynamicArray< BSPTriangle > triangles;
 };
 
-static MaterialMesh * GetMaterialMesh( DynamicArray< MaterialMesh > * meshes, Span< const char > material ) {
+static MaterialMesh * GetMaterialMesh( DynamicArray< MaterialMesh > * meshes, Span< const char > material, u64 material_hash ) {
 	for( MaterialMesh & mesh : meshes->span() ) {
-		if( StrEqual( mesh.material, material ) ) {
+		if( mesh.material_hash == material_hash ) {
 			return &mesh;
 		}
 	}
 
 	MaterialMesh mesh;
 	mesh.material = material;
+	mesh.material_hash = material_hash;
 	mesh.vertices.init( sys_allocator );
 	mesh.triangles.init( sys_allocator );
 	meshes->add( mesh );
@@ -618,7 +630,7 @@ static Vec2 ProjectFaceVert( Vec3 centroid, Vec3 tangent, Vec3 bitangent, Vec3 p
 }
 
 static void ProcessBrush( BSP * bsp, MinMax3 * bounds, DynamicArray< MaterialMesh > * meshes, const Brush & brush, u32 entity_id, u32 brush_id ) {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	Plane planes[ MAX_BRUSH_FACES ];
 	*bounds = MinMax3::Empty();
@@ -632,8 +644,8 @@ static void ProcessBrush( BSP * bsp, MinMax3 * bounds, DynamicArray< MaterialMes
 
 	// render geometry and bounds
 	for( size_t i = 0; i < brush.faces.n; i++ ) {
-		bool generate_render_geometry = !IsNodrawMaterial( brush.faces.span()[ i ].material );
-		MaterialMesh * mesh = GetMaterialMesh( meshes, brush.faces.span()[ i ].material );
+		bool generate_render_geometry = !IsNodrawMaterial( brush.faces.span()[ i ].material_hash );
+		MaterialMesh * mesh = GetMaterialMesh( meshes, brush.faces.span()[ i ].material, brush.faces.span()[ i ].material_hash );
 
 		// generate arbitrary list of points
 		FaceVerts verts = { };
@@ -703,7 +715,7 @@ static void ProcessBrush( BSP * bsp, MinMax3 * bounds, DynamicArray< MaterialMes
 		u32 content_flags = 0;
 
 		for( size_t i = 0; i < brush.faces.n; i++ ) {
-			u32 face_material = AddMaterial( bsp, brush.faces.span()[ i ].material );
+			u32 face_material = AddMaterial( bsp, brush.faces.span()[ i ].material, brush.faces.span()[ i ].material_hash );
 			u32 face_flags = ( *bsp->materials )[ face_material ].content_flags;
 			if( i == 0 ) {
 				brush_material = face_material;
@@ -718,7 +730,7 @@ static void ProcessBrush( BSP * bsp, MinMax3 * bounds, DynamicArray< MaterialMes
 		AddBevelPlanes( bsp, *bounds, brush_material );
 
 		for( size_t i = 0; i < brush.faces.n; i++ ) {
-			u32 material = AddMaterial( bsp, brush.faces.span()[ i ].material );
+			u32 material = AddMaterial( bsp, brush.faces.span()[ i ].material, brush.faces.span()[ i ].material_hash );
 			AddBSPPlane( bsp, planes[ i ], material );
 		}
 
@@ -860,7 +872,7 @@ static void PatchToVerts( MaterialMesh * mesh, const Patch & patch ) {
 }
 
 static void AddPatchBrushes( BSP * bsp, DynamicArray< MinMax3 > * brush_bounds, u32 material, const MaterialMesh * mesh, size_t first_patch_tri ) {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	for( size_t i = first_patch_tri; i < mesh->triangles.size(); i++ ) {
 		BSPTriangle tri = mesh->triangles[ i ];
@@ -908,7 +920,7 @@ static void AddPatchBrushes( BSP * bsp, DynamicArray< MinMax3 > * brush_bounds, 
 	}
 }
 
-Span< const char > ParseComment( Span< const char > * comment, Span< const char > str ) {
+static Span< const char > ParseComment( Span< const char > * comment, Span< const char > str ) {
 	return PEGCapture( comment, str, []( Span< const char > str ) {
 		str = PEGLiteral( str, "//" );
 		str = PEGNOrMore( str, 0, []( Span< const char > str ) {
@@ -941,25 +953,25 @@ struct CandidatePlanes {
 	Span< CandidatePlane > axes[ 3 ];
 };
 
-int MaxAxis( MinMax3 bounds ) {
+static int MaxAxis( MinMax3 bounds ) {
 	Vec3 dims = bounds.maxs - bounds.mins;
 	if( dims.x > dims.y && dims.x > dims.z )
 		return 0;
 	return dims.y > dims.z ? 1 : 2;
 }
 
-float SurfaceArea( MinMax3 bounds ) {
+static float SurfaceArea( MinMax3 bounds ) {
 	Vec3 dims = bounds.maxs - bounds.mins;
 	return 2.0f * ( dims.x * dims.y + dims.x * dims.z + dims.y * dims.z );
 }
 
-CandidatePlanes BuildCandidatePlanes( Allocator * a, Span< const u32 > brush_ids, Span< const MinMax3 > brush_bounds ) {
-	ZoneScoped;
+static CandidatePlanes BuildCandidatePlanes( Allocator * a, Span< const u32 > brush_ids, Span< const MinMax3 > brush_bounds ) {
+	TracyZoneScoped;
 
 	CandidatePlanes planes;
 
 	for( int i = 0; i < 3; i++ ) {
-		ZoneScopedN( "iter" );
+		TracyZoneScopedN( "iter" );
 		Span< CandidatePlane > axis = ALLOC_SPAN( a, CandidatePlane, brush_ids.n * 2 );
 		planes.axes[ i ] = axis;
 
@@ -970,7 +982,7 @@ CandidatePlanes BuildCandidatePlanes( Allocator * a, Span< const u32 > brush_ids
 		}
 
 		{
-			ZoneScopedN( "sort" );
+			TracyZoneScopedN( "sort" );
 			std::sort( axis.begin(), axis.end(), []( const CandidatePlane & a, const CandidatePlane & b ) {
 				if( a.distance == b.distance )
 					return a.start_edge < b.start_edge;
@@ -995,7 +1007,7 @@ static MinMax3 HugeBounds() {
 }
 
 static s32 MakeLeaf( BSP * bsp, Span< const u32 > brush_ids ) {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	BSPLeaf leaf = { };
 	leaf.bounds = HugeBounds();
@@ -1009,7 +1021,7 @@ static s32 MakeLeaf( BSP * bsp, Span< const u32 > brush_ids ) {
 }
 
 static s32 BuildKDTreeRecursive( TempAllocator * temp, BSP * bsp, Span< const u32 > brush_ids, Span< const MinMax3 > brush_bounds, CandidatePlanes candidate_planes, MinMax3 node_bounds, u32 max_depth ) {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	if( brush_ids.n <= 1 || max_depth == 0 ) {
 		return MakeLeaf( bsp, brush_ids );
@@ -1022,7 +1034,7 @@ static s32 BuildKDTreeRecursive( TempAllocator * temp, BSP * bsp, Span< const u3
 	float node_surface_area = SurfaceArea( node_bounds );
 
 	{
-		ZoneScopedN( "Find best split" );
+		TracyZoneScopedN( "Find best split" );
 
 		for( int i = 0; i < 3; i++ ) {
 			int axis = ( MaxAxis( node_bounds ) + i ) % 3;
@@ -1094,7 +1106,7 @@ static s32 BuildKDTreeRecursive( TempAllocator * temp, BSP * bsp, Span< const u3
 	DynamicArray< u32 > above_brushes( temp );
 
 	{
-		ZoneScopedN( "Classify above/below" );
+		TracyZoneScopedN( "Classify above/below" );
 
 		for( size_t i = 0; i < best_plane; i++ ) {
 			if( candidate_planes.axes[ best_axis ][ i ].start_edge ) {
@@ -1112,7 +1124,7 @@ static s32 BuildKDTreeRecursive( TempAllocator * temp, BSP * bsp, Span< const u3
 	CandidatePlanes below_planes;
 	CandidatePlanes above_planes;
 	{
-		ZoneScopedN( "Split candidate planes" );
+		TracyZoneScopedN( "Split candidate planes" );
 
 		for( int i = 0; i < 3; i++ ) {
 			Span< CandidatePlane > axis_below = ALLOC_SPAN( temp, CandidatePlane, below_brushes.size() * 2 );
@@ -1123,7 +1135,7 @@ static s32 BuildKDTreeRecursive( TempAllocator * temp, BSP * bsp, Span< const u3
 			for( size_t j = 0; j < candidate_planes.axes[ i ].n; j++ ) {
 				CandidatePlane & plane = candidate_planes.axes[ i ][ j ];
 				const MinMax3 & curr_brush_bounds = brush_bounds[ plane.brush_id ];
-				
+
 				if( curr_brush_bounds.mins[ best_axis ] < distance )
 					axis_below[ below_count++ ] = plane;
 				if( curr_brush_bounds.maxs[ best_axis ] > distance )
@@ -1143,8 +1155,8 @@ static s32 BuildKDTreeRecursive( TempAllocator * temp, BSP * bsp, Span< const u3
 	return node_id;
 }
 
-void BuildKDTree( TempAllocator * temp, BSP * bsp, Span< const MinMax3 > brush_bounds ) {
-	ZoneScoped;
+static void BuildKDTree( TempAllocator * temp, BSP * bsp, Span< const MinMax3 > brush_bounds ) {
+	TracyZoneScoped;
 
 	MinMax3 tree_bounds = MinMax3::Empty();
 	for( const MinMax3 & bounds : brush_bounds ) {
@@ -1197,7 +1209,7 @@ void Pack( DynamicArray< u8 > & packed, BSPHeader * header, BSPLump lump, Span< 
 }
 
 static void WriteBSP( TempAllocator * temp, const char * path, BSP * bsp ) {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	DynamicArray< u8 > packed( temp );
 
@@ -1231,7 +1243,7 @@ static void WriteBSP( TempAllocator * temp, const char * path, BSP * bsp ) {
 	}
 }
 
-Span< const char > GetKey( Span< const KeyValue > kvs, const char * key ) {
+static Span< const char > GetKey( Span< const KeyValue > kvs, const char * key ) {
 	for( KeyValue kv : kvs ) {
 		if( StrCaseEqual( kv.key, key ) ) {
 			return kv.value;
@@ -1269,7 +1281,7 @@ int main( int argc, char ** argv ) {
 	Span< const char > map( carfentanil, carfentanil_len );
 
 	{
-		ZoneScopedN( "Erase comments" );
+		TracyZoneScopedN( "Erase comments" );
 
 		for( size_t i = 0; i < map.n; i++ ) {
 			Span< const char > comment;
@@ -1291,7 +1303,7 @@ int main( int argc, char ** argv ) {
 	};
 
 	{
-		ZoneScopedN( "Parsing" );
+		TracyZoneScopedN( "Parsing" );
 		map = CaptureNOrMore( &entities, map, 1, ParseEntity );
 		map = SkipWhitespace( map );
 	}
@@ -1301,10 +1313,10 @@ int main( int argc, char ** argv ) {
 		Fatal( "Can't parse the map" );
 	}
 
-	FrameMark;
+	TracyCFrameMark;
 
 	{
-		ZoneScopedN( "Flatten func_groups" );
+		TracyZoneScopedN( "Flatten func_groups" );
 
 		for( Entity & entity : entities ) {
 			if( GetKey( entity.kvs.span(), "classname" ) != "func_group" )
@@ -1318,7 +1330,7 @@ int main( int argc, char ** argv ) {
 		}
 	}
 
-	FrameMark;
+	TracyCFrameMark;
 
 	DynamicString entstr( sys_allocator );
 	DynamicArray< BSPMaterial > materials( sys_allocator );
@@ -1366,12 +1378,12 @@ int main( int argc, char ** argv ) {
 		}
 
 		for( const Patch & patch : entity.patches ) {
-			MaterialMesh * mesh = GetMaterialMesh( &entity_meshes, patch.material );
+			MaterialMesh * mesh = GetMaterialMesh( &entity_meshes, patch.material, patch.material_hash );
 			size_t patch_first_tri = mesh->triangles.size();
 
 			PatchToVerts( mesh, patch );
 
-			u32 material = AddMaterial( &bsp, patch.material );
+			u32 material = AddMaterial( &bsp, patch.material, patch.material_hash );
 			AddPatchBrushes( &bsp, &brush_bounds, material, mesh, patch_first_tri ); // TODO
 		}
 
@@ -1393,7 +1405,7 @@ int main( int argc, char ** argv ) {
 			bsp.triangles->add_many( mesh.triangles.span() );
 
 			BSPMesh bsp_mesh = { };
-			bsp_mesh.material = AddMaterial( &bsp, mesh.material );
+			bsp_mesh.material = AddMaterial( &bsp, mesh.material, mesh.material_hash );
 			bsp_mesh.type = s32( FaceType_Mesh );
 			bsp_mesh.bounds = HugeBounds();
 			bsp_mesh.first_vertex = base_vertex;
@@ -1425,7 +1437,7 @@ int main( int argc, char ** argv ) {
 		}
 	}
 
-	FrameMark;
+	TracyCFrameMark;
 
 	BuildKDTree( &temp, &bsp, brush_bounds.span() );
 

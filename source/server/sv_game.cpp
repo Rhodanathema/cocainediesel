@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon/cmodel.h"
 #include "qcommon/version.h"
 
-void PF_DropClient( edict_t *ent, int type, const char *message ) {
+void PF_DropClient( edict_t *ent, const char *message ) {
 	int p;
 	client_t *drop;
 
@@ -37,9 +37,9 @@ void PF_DropClient( edict_t *ent, int type, const char *message ) {
 
 	drop = svs.clients + ( p - 1 );
 	if( message ) {
-		SV_DropClient( drop, type, "%s", message );
+		SV_DropClient( drop, "%s", message );
 	} else {
-		SV_DropClient( drop, type, NULL );
+		SV_DropClient( drop, NULL );
 	}
 }
 
@@ -80,7 +80,7 @@ void PF_ConfigString( int index, const char *val ) {
 
 	size_t len = strlen( val );
 	if( len >= sizeof( sv.configstrings[0] ) ) {
-		Com_Printf( "WARNING: 'PF_Configstring', configstring %i overflowed (%" PRIuPTR ")\n", index, (uintptr_t)strlen( val ) );
+		Com_Printf( "WARNING: 'PF_Configstring', configstring %i overflowed (%zu)\n", index, strlen( val ) );
 		len = sizeof( sv.configstrings[0] ) - 1;
 	}
 

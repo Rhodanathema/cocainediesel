@@ -84,12 +84,12 @@ void CG_CheckPredictionError() {
 	// save the prediction error for interpolation
 	if( Abs( delta[0] ) > 128 || Abs( delta[1] ) > 128 || Abs( delta[2] ) > 128 ) {
 		if( cg_showMiss->integer ) {
-			Com_Printf( "prediction miss on %" PRIi64 ": %i\n", cg.frame.serverFrame, Abs( delta[0] ) + Abs( delta[1] ) + Abs( delta[2] ) );
+			Com_GGPrint( "prediction miss on {}: {}", cg.frame.serverFrame, Abs( delta[0] ) + Abs( delta[1] ) + Abs( delta[2] ) );
 		}
 		cg.predictionError = Vec3( 0.0f );          // a teleport or something
 	} else {
 		if( cg_showMiss->integer && ( delta[0] || delta[1] || delta[2] ) ) {
-			Com_Printf( "prediction miss on %" PRIi64" : %i\n", cg.frame.serverFrame, Abs( delta[0] ) + Abs( delta[1] ) + Abs( delta[2] ) );
+			Com_GGPrint( "prediction miss on {}: {}", cg.frame.serverFrame, Abs( delta[0] ) + Abs( delta[1] ) + Abs( delta[2] ) );
 		}
 		cg.predictedOrigins[frame] = cg.frame.playerState.pmove.origin;
 		cg.predictionError = Vec3( delta[ 0 ], delta[ 1 ], delta[ 2 ] ); // save for error interpolation
@@ -242,11 +242,11 @@ static void CG_ClipMoveToEntities( Vec3 start, Vec3 mins, Vec3 maxs, Vec3 end, i
 }
 
 void CG_Trace( trace_t *t, Vec3 start, Vec3 mins, Vec3 maxs, Vec3 end, int ignore, int contentmask ) {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	// check against world
 	CM_TransformedBoxTrace( CM_Client, cl.map->cms, t, start, end, mins, maxs, NULL, contentmask, Vec3( 0.0f ), Vec3( 0.0f ) );
-	t->ent = t->fraction < 1.0 ? 0 : -1; // world entity is 0
+	t->ent = t->fraction < 1.0f ? 0 : -1; // world entity is 0
 	if( t->fraction == 0 ) {
 		return; // blocked by the world
 	}
@@ -256,7 +256,7 @@ void CG_Trace( trace_t *t, Vec3 start, Vec3 mins, Vec3 maxs, Vec3 end, int ignor
 }
 
 int CG_PointContents( Vec3 point ) {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	int contents = CM_TransformedPointContents( CM_Client, cl.map->cms, point, NULL, Vec3( 0.0f ), Vec3( 0.0f ) );
 
@@ -333,7 +333,7 @@ static void CG_PredictSmoothSteps() {
 * Sets cg.predictedVelocty, cg.predictedOrigin and cg.predictedAngles
 */
 void CG_PredictMovement() {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	int64_t ucmdExecuted, ucmdHead;
 	int64_t frame;
@@ -369,7 +369,7 @@ void CG_PredictMovement() {
 	// copy current state to pmove
 	memset( &pm, 0, sizeof( pm ) );
 	pm.playerState = &cg.predictedPlayerState;
-	pm.scale = cg_entities[cg.frame.playerState.POVnum].current.scale;
+	pm.scale = cg_entities[cg.frame.playerState.POVnum].interpolated.scale;
 
 	// clear the triggered toggles for this prediction round
 	memset( &cg_triggersListTriggered, false, sizeof( cg_triggersListTriggered ) );

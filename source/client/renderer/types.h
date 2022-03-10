@@ -61,6 +61,7 @@ struct GPUParticle {
 	float acceleration;
 	float drag;
 	float restitution;
+	float PADDING;
 	Vec4 uvwh;
 	RGBA8 start_color;
 	RGBA8 end_color;
@@ -69,12 +70,7 @@ struct GPUParticle {
 	float age;
 	float lifetime;
 	u32 flags;
-};
-
-struct GPUParticleFeedback {
-	Vec3 position_normal;
-	RGB8 color;
-	u8 parm;
+	u32 PADDING2;
 };
 
 struct TRS {
@@ -100,6 +96,9 @@ enum InstanceType {
 	InstanceType_ModelShadows,
 	InstanceType_ModelOutlines,
 	InstanceType_ModelSilhouette,
+
+	InstanceType_ComputeShader,
+	InstanceType_ComputeShaderIndirect,
 };
 
 struct GPUMaterial {

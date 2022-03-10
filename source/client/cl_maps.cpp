@@ -25,7 +25,7 @@ static void DeleteMap( Map * map ) {
 }
 
 static void FillMapModelsHashtable() {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	map_models_hashtable.clear();
 
@@ -42,10 +42,11 @@ static void FillMapModelsHashtable() {
 }
 
 bool AddMap( Span< const u8 > data, const char * path ) {
-	ZoneScoped;
-	ZoneText( path, strlen( path ) );
+	TracyZoneScoped;
+	TracyZoneText( path, strlen( path ) );
 
-	u64 hash = Hash64( StripExtension( path ) );
+	Span< const char > name = StripPrefix( StripExtension( path ), "maps/" );
+	u64 hash = Hash64( name );
 
 	Map map = { };
 	// TODO: need more map validation because they can be downloaded from the server
@@ -62,8 +63,7 @@ bool AddMap( Span< const u8 > data, const char * path ) {
 		DeleteMap( &maps[ idx ] );
 	}
 
-	map.name = CopyString( sys_allocator, path );
-
+	map.name = ( *sys_allocator )( "{}", name );
 	map.cms = CM_LoadMap( CM_Client, data, hash );
 	if( map.cms == NULL ) {
 		Fatal( "CM_LoadMap" );
@@ -77,7 +77,7 @@ bool AddMap( Span< const u8 > data, const char * path ) {
 }
 
 void InitMaps() {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	num_maps = 0;
 
@@ -91,7 +91,7 @@ void InitMaps() {
 }
 
 void HotloadMaps() {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	bool hotloaded_anything = false;
 
@@ -112,7 +112,7 @@ void HotloadMaps() {
 }
 
 void ShutdownMaps() {
-	ZoneScoped;
+	TracyZoneScoped;
 
 	for( u32 i = 0; i < num_maps; i++ ) {
 		DeleteMap( &maps[ i ] );

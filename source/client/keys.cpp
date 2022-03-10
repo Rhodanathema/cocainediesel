@@ -18,6 +18,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
+#include <ctype.h>
+
 #include "qcommon/string.h"
 #include "client/client.h"
 
@@ -105,7 +107,7 @@ static const keyname_t keynames[] = {
 
 	{ "PAUSE", K_PAUSE },
 
-	{ nullptr, 0 }
+	{ NULL, 0 }
 };
 
 int Key_StringToKeynum( const char *str ) {
@@ -119,7 +121,7 @@ int Key_StringToKeynum( const char *str ) {
 	}
 
 	for( kn = keynames; kn->name; kn++ ) {
-		if( !Q_stricmp( str, kn->name ) ) {
+		if( StrCaseEqual( str, kn->name ) ) {
 			return kn->keynum;
 		}
 	}

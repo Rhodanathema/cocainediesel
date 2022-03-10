@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <ctype.h>
 #include <limits.h>
+#include <type_traits>
 
 #include "qcommon/qcommon.h"
 #include "qcommon/strtonum.h"
@@ -78,31 +79,6 @@ bool COM_ValidateRelativeFilename( const char *filename ) {
 	}
 
 	return true;
-}
-
-//============================================================================
-//
-//					BYTE ORDER FUNCTIONS
-//
-//============================================================================
-
-/*
-* va
-*
-* does a varargs printf into a temp buffer, so I don't need to have
-* varargs versions of all text functions.
-*/
-char *va( const char *format, ... ) {
-	va_list argptr;
-	static int str_index;
-	static char string[8][2048];
-
-	str_index = ( str_index + 1 ) & 7;
-	va_start( argptr, format );
-	vsnprintf( string[str_index], sizeof( string[0] ), format, argptr );
-	va_end( argptr );
-
-	return string[str_index];
 }
 
 static bool IsWhitespace( char c ) {
@@ -242,27 +218,23 @@ bool TrySpanToFloat( Span< const char > str, float * x ) {
 	return end == buf + str.n;
 }
 
-bool TryStringToU64( const char * str, u64 * x ) {
-	if( strlen( str ) == 0 )
+bool TrySpanToU64( Span< const char > str, u64 * x ) {
+	if( str.n == 0 )
 		return false;
 
 	u64 res = 0;
-	while( true ) {
-		if( *str == '\0' )
-			break;
-
-		if( *str < '0' || *str > '9' )
+	for( char c : str ) {
+		if( c < '0' || c > '9' )
 			return false;
 
 		if( U64_MAX / 10 < res )
 			return false;
 
-		u64 digit = *str - '0';
+		u64 digit = c - '0';
 		if( U64_MAX - digit < res )
 			return false;
 
 		res = res * 10 + digit;
-		str++;
 	}
 
 	*x = res;
@@ -279,9 +251,9 @@ float SpanToFloat( Span< const char > token, float def ) {
 	return TrySpanToFloat( token, &x ) ? x : def;
 }
 
-u64 StringToU64( const char * str, u64 def ) {
+u64 SpanToU64( Span< const char > str, u64 def ) {
 	u64 x;
-	return TryStringToU64( str, &x ) ? x : def;
+	return TrySpanToU64( str, &x ) ? x : def;
 }
 
 int ParseInt( Span< const char > * cursor, int def, ParseStopOnNewLine stop ) {
@@ -361,6 +333,10 @@ bool CaseStartsWith( const char * str, const char * prefix ) {
 	return StrCaseEqual( Span< const char >( str, strlen( prefix ) ), prefix );
 }
 
+Span< const char > StripPrefix( Span< const char > str, const char * prefix ) {
+	return StartsWith( str, prefix ) ? str + strlen( prefix ) : str;
+}
+
 bool CaseContains( const char * haystack, const char * needle ) {
 	if( strlen( needle ) > strlen( haystack ) )
 		return false;
@@ -405,10 +381,13 @@ Span< const char > StripExtension( const char * path ) {
 	return StripExtension( MakeSpan( path ) );
 }
 
+Span< const char > FileName( Span< const char > path ) {
+	Span< const char > name = MemRChr( path, '/', true );
+	return name == "" ? path : name + 1;
+}
+
 Span< const char > FileName( const char * path ) {
-	const char * filename = strrchr( path, '/' );
-	filename = filename == NULL ? path : filename + 1;
-	return MakeSpan( filename );
+	return FileName( MakeSpan( path ) );
 }
 
 Span< const char > BasePath( const char * path ) {
@@ -442,18 +421,6 @@ void Q_strncatz( char *dest, const char *src, size_t size ) {
 		}
 		*dest = '\0';
 	}
-}
-
-char *Q_strupr( char *s ) {
-	char *p;
-
-	if( s ) {
-		for( p = s; *s; s++ )
-			*s = toupper( *s );
-		return p;
-	}
-
-	return NULL;
 }
 
 char *Q_strlwr( char *s ) {
@@ -824,4 +791,19 @@ Span< const char > ParseWorldspawnKey( Span< const char > entities, const char *
 	}
 
 	return Span< const char >();
+}
+
+void operator++( WeaponType & x, int ) {
+	using T = typename std::underlying_type< WeaponType >::type;
+	x = WeaponType( T( x ) + 1 );
+}
+
+void operator++( GadgetType & x, int ) {
+	using T = typename std::underlying_type< GadgetType >::type;
+	x = GadgetType( T( x ) + 1 );
+}
+
+void operator++( PerkType & x, int ) {
+	using T = typename std::underlying_type< PerkType >::type;
+	x = PerkType( T( x ) + 1 );
 }

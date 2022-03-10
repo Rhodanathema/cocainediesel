@@ -36,7 +36,7 @@ static Chat chat;
 
 static void OpenChat() {
 	if( !cls.demo.playing ) {
-		bool team = Q_stricmp( Cmd_Argv( 0 ), "messagemode2" ) == 0;
+		bool team = StrCaseEqual( Cmd_Argv( 0 ), "messagemode2" );
 		chat.mode = team ? ChatMode_SayTeam : ChatMode_Say;
 		chat.input[ 0 ] = '\0';
 		chat.scroll_to_bottom = true;
@@ -46,7 +46,8 @@ static void OpenChat() {
 
 static void CloseChat() {
 	chat.mode = ChatMode_None;
-	CL_SetKeyDest( key_game );
+	if( !Con_IsVisible() )
+		CL_SetKeyDest( key_game );
 }
 
 void CG_InitChat() {

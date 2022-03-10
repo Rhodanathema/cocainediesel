@@ -46,9 +46,7 @@ void RefreshMapList( Allocator * a ) {
 		}
 	}
 
-	std::sort( maps.begin(), maps.end(), []( const char * a, const char * b ) {
-		return strcmp( a, b ) < 0;
-	} );
+	std::sort( maps.begin(), maps.end(), SortCStringsComparator );
 }
 
 Span< const char * > GetMapList() {
@@ -57,7 +55,7 @@ Span< const char * > GetMapList() {
 
 bool MapExists( const char * name ) {
 	for( const char * map : maps ) {
-		if( strcmp( map, name ) == 0 ) {
+		if( StrEqual( map, name ) ) {
 			return true;
 		}
 	}
@@ -66,8 +64,7 @@ bool MapExists( const char * name ) {
 }
 
 Span< const char * > CompleteMapName( TempAllocator * a, const char * prefix ) {
-	NonRAIIDynamicArray< const char * > completions;
-	completions.init( a );
+	NonRAIIDynamicArray< const char * > completions( a );
 
 	for( const char * map : maps ) {
 		if( CaseStartsWith( map, prefix ) ) {

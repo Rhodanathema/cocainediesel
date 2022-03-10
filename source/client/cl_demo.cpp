@@ -50,14 +50,16 @@ void CL_Stop_f() {
 		return;
 	}
 
+	TempAllocator temp = cls.frame_arena.temp();
+
 	// finish up
 	SNAP_StopDemoRecording( cls.demo.file );
 
 	// write some meta information about the match/demo
 	CL_SetDemoMetaKeyValue( "hostname", cl.configstrings[CS_HOSTNAME] );
-	CL_SetDemoMetaKeyValue( "localtime", va( "%" PRIi64, (int64_t)cls.demo.localtime ) );
+	CL_SetDemoMetaKeyValue( "localtime", temp( "{}", (int64_t)cls.demo.localtime ) );
 	CL_SetDemoMetaKeyValue( "multipov", "0" );
-	CL_SetDemoMetaKeyValue( "duration", va( "%u", (int)ceilf( (double)cls.demo.duration / 1000.0 ) ) );
+	CL_SetDemoMetaKeyValue( "duration", temp( "{}", (int)ceilf( (double)cls.demo.duration / 1000.0 ) ) );
 	CL_SetDemoMetaKeyValue( "mapname", cl.map->name );
 	CL_SetDemoMetaKeyValue( "matchscore", cl.configstrings[CS_MATCHSCORE] );
 	CL_SetDemoMetaKeyValue( "version", APP_VERSION );
@@ -302,9 +304,9 @@ void CL_PauseDemo_f() {
 	}
 
 	if( Cmd_Argc() > 1 ) {
-		if( !Q_stricmp( Cmd_Argv( 1 ), "on" ) ) {
+		if( StrCaseEqual( Cmd_Argv( 1 ), "on" ) ) {
 			CL_PauseDemo( true );
-		} else if( !Q_stricmp( Cmd_Argv( 1 ), "off" ) ) {
+		} else if( StrCaseEqual( Cmd_Argv( 1 ), "off" ) ) {
 			CL_PauseDemo( false );
 		}
 		return;
