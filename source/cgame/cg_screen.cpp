@@ -69,8 +69,8 @@ static int scr_centertime_off;
 * Called for important messages that should stay in the center of the screen
 * for a few moments
 */
-void CG_CenterPrint( const char *str ) {
-	Q_strncpyz( scr_centerstring, str, sizeof( scr_centerstring ) );
+void CG_CenterPrint( Span< Span< const char > > tokens ) {
+	ggformat( scr_centerstring, sizeof( scr_centerstring ), "{}", tokens[ 1 ] );
 	scr_centertime_off = centerTimeOff;
 }
 

@@ -247,7 +247,7 @@ static char * MakeObituary( Allocator * a, RNG * rng, int type, DamageType damag
 	return ( *a )( "{}{}{}{}", prefix1, prefix2, prefix3, obituaries[ RandomUniform( rng, 0, obituaries.n ) ] );
 }
 
-void CG_SC_Obituary() {
+void CG_SC_Obituary( Span< Span< const char > > tokens ) {
 	int victimNum = atoi( Cmd_Argv( 1 ) );
 	int attackerNum = atoi( Cmd_Argv( 2 ) );
 	int topAssistorNum = atoi( Cmd_Argv( 3 ) );

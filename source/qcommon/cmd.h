@@ -12,7 +12,7 @@ template< typename... Rest >
 bool Cmd_Execute( const char * fmt, const Rest & ... rest ) {
 	char buf[ 1024 ];
 	ggformat( buf, sizeof( buf ), fmt, rest... );
-	return Cmd_ExecuteLine( buf );
+	return Cmd_ExecuteLine( buf, false );
 }
 
 void Cmd_ExecuteEarlyCommands( int argc, char ** argv );

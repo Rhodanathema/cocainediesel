@@ -254,7 +254,7 @@ static void CG_SC_SaveLoadout() {
 
 struct ServerCommand {
 	const char * name;
-	void ( *func )();
+	void ( *func )( Span< Span< const char > > tokens );
 };
 
 static const ServerCommand server_commands[] = {
@@ -270,12 +270,13 @@ static const ServerCommand server_commands[] = {
 };
 
 void CG_GameCommand( const char * command ) {
-	Cmd_TokenizeString( command );
-	const char * name = Cmd_Argv( 0 );
+	TempAllocator temp = cls.frame_arena.temp();
+
+	Span< Span< const char > > tokens = Cmd_TokenizeString( &temp, command );
 
 	for( ServerCommand cmd : server_commands ) {
-		if( StrEqual( name, cmd.name ) ) {
-			cmd.func();
+		if( StrEqual( tokens[ 0 ], cmd.name ) ) {
+			cmd.func( tokens );
 			return;
 		}
 	}

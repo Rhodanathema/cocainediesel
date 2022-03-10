@@ -232,7 +232,7 @@ void SP_jumppad( edict_t * ent, const spawn_temp_t * st );
 // g_cmds.c
 //
 
-typedef void ( *gamecommandfunc_t )( edict_t * );
+typedef void ( *gamecommandfunc_t )( edict_t * ent, Span< Span< const char > > tokens );
 
 bool CheckFlood( edict_t *ent, bool teamonly );
 void G_InitGameCommands();

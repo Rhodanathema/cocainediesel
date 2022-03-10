@@ -129,7 +129,7 @@ static void CL_ParseServerData( msg_t *msg ) {
 	}
 
 	// get the configstrings request
-	CL_AddReliableCommand( temp( "configstrings {} 0", cl.servercount ) );
+	CL_AddReliableCommand( temp( "configstrings {}", cl.servercount ) );
 }
 
 static void CL_ParseBaseline( msg_t *msg ) {

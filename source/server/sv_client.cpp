@@ -210,32 +210,19 @@ static void SV_Configstrings_f( client_t * client, Span< Span< const char > > to
 	}
 
 	// handle the case of a level changing while a client was connecting
-	if( atoi( tokens[ 1 ] ) != svs.spawncount ) {
+	if( SpanToInt( tokens[ 1 ] ) != svs.spawncount ) {
 		Com_Printf( "SV_Configstrings_f from different level\n" );
 		SV_SendServerCommand( client, "reconnect" );
 		return;
 	}
 
-	int start = atoi( tokens[ 2 ] );
-	if( start < 0 ) {
-		start = 0;
-	}
-
-	// write a packet full of data
-	while( start < MAX_CONFIGSTRINGS &&
-		   client->reliableSequence - client->reliableAcknowledge < MAX_RELIABLE_COMMANDS - 8 ) {
-		if( sv.configstrings[start][0] ) {
-			SV_SendServerCommand( client, "cs %i \"%s\"", start, sv.configstrings[start] );
+	for( size_t i = 0; i < MAX_CONFIGSTRINGS; i++ ) {
+		if( !StrEqual( sv.configstrings[ i ], "" ) ) {
+			SV_SendServerCommand( client, "cs %i \"%s\"", start, sv.configstrings[ i ] );
 		}
-		start++;
 	}
 
-	// send next command
-	if( start == MAX_CONFIGSTRINGS ) {
-		SV_SendServerCommand( client, "cmd baselines %i 0", svs.spawncount );
-	} else {
-		SV_SendServerCommand( client, "cmd configstrings %i %i", svs.spawncount, start );
-	}
+	SV_SendServerCommand( client, "cmd baselines %i", svs.spawncount );
 }
 
 static void SV_Baselines_f( client_t * client, Span< Span< const char > > tokens ) {
@@ -294,7 +281,7 @@ static void SV_Begin_f( client_t * client, Span< Span< const char > > tokens ) {
 	// wsw : r1q2[end]
 
 	// handle the case of a level changing while a client was connecting
-	if( atoi( tokens[ 1 ] ) != svs.spawncount ) {
+	if( SpanToInt( tokens[ 1 ] ) != svs.spawncount ) {
 		Com_Printf( "SV_Begin_f from different level\n" );
 		SV_SendServerCommand( client, "changing" );
 		SV_SendServerCommand( client, "reconnect" );

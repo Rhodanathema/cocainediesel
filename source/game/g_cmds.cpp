@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 * Teleports client to specified position
 * If client is not spectator teleporting is only done if position is free and teleport effects are drawn.
 */
-static bool G_Teleport( edict_t *ent, Vec3 origin, Vec3 angles ) {
+static bool G_Teleport( edict_t * ent, Vec3 origin, Vec3 angles ) {
 	if( !ent->r.inuse || !ent->r.client ) {
 		return false;
 	}
@@ -69,7 +69,7 @@ static bool G_Teleport( edict_t *ent, Vec3 origin, Vec3 angles ) {
 
 //=================================================================================
 
-static void Cmd_Noclip_f( edict_t *ent ) {
+static void Cmd_Noclip_f( edict_t * ent, Span< Span< const char > > tokens ) {
 	const char *msg;
 
 	if( sv_cheats->integer == 0 ) {
@@ -88,7 +88,7 @@ static void Cmd_Noclip_f( edict_t *ent ) {
 	G_PrintMsg( ent, "%s", msg );
 }
 
-static void Cmd_GameOperator_f( edict_t *ent ) {
+static void Cmd_GameOperator_f( edict_t * ent, Span< Span< const char > > tokens ) {
 	if( StrEqual( g_operator_password->value, "" ) ) {
 		G_PrintMsg( ent, "Operator is disabled in this server\n" );
 		return;
@@ -111,7 +111,7 @@ static void Cmd_GameOperator_f( edict_t *ent ) {
 	G_PrintMsg( ent, "Incorrect operator password.\n" );
 }
 
-static void Cmd_Kill_f( edict_t *ent ) {
+static void Cmd_Kill_f( edict_t * ent, Span< Span< const char > > tokens ) {
 	if( ent->r.solid == SOLID_NOT ) {
 		return;
 	}
@@ -122,15 +122,15 @@ static void Cmd_Kill_f( edict_t *ent ) {
 	G_Killed( ent, ent, ent, -1, WorldDamage_Suicide, 100000 );
 }
 
-void Cmd_ChaseNext_f( edict_t *ent ) {
+void Cmd_ChaseNext_f( edict_t * ent, Span< Span< const char > > tokens ) {
 	G_ChaseStep( ent, 1 );
 }
 
-void Cmd_ChasePrev_f( edict_t *ent ) {
+void Cmd_ChasePrev_f( edict_t * ent, Span< Span< const char > > tokens ) {
 	G_ChaseStep( ent, -1 );
 }
 
-static void Cmd_Position_f( edict_t *ent ) {
+static void Cmd_Position_f( edict_t * ent, Span< Span< const char > > tokens ) {
 	const char *action;
 
 	if( !sv_cheats->integer && server_gs.gameState.match_state > MatchState_Warmup &&
@@ -182,7 +182,7 @@ static void Cmd_Position_f( edict_t *ent ) {
 	}
 }
 
-bool CheckFlood( edict_t *ent, bool teamonly ) {
+bool CheckFlood( edict_t * ent, bool teamonly ) {
 	int i;
 	gclient_t *client;
 
@@ -274,7 +274,7 @@ bool CheckFlood( edict_t *ent, bool teamonly ) {
 	return false;
 }
 
-void Cmd_Say_f( edict_t *ent, bool arg0, bool checkflood ) {
+void Cmd_Say_f( edict_t * ent, bool arg0, bool checkflood ) {
 	char *p;
 	char text[2048];
 	size_t arg0len = 0;
@@ -307,7 +307,7 @@ void Cmd_Say_f( edict_t *ent, bool arg0, bool checkflood ) {
 	G_ChatMsg( NULL, ent, false, "%s", text );
 }
 
-static void Cmd_SayCmd_f( edict_t * ent ) {
+static void Cmd_SayCmd_f( edict_t * ent, Span< Span< const char > > tokens ) {
 	if( !G_ISGHOSTING( ent ) ) {
 		edict_t * event = G_PositionedSound( ent->s.origin, CHAN_AUTO, "sounds/typewriter/return" );
 		event->s.ownerNum = ent->s.number;
@@ -316,7 +316,7 @@ static void Cmd_SayCmd_f( edict_t * ent ) {
 	Cmd_Say_f( ent, false, true );
 }
 
-static void Cmd_SayTeam_f( edict_t * ent ) {
+static void Cmd_SayTeam_f( edict_t * ent, Span< Span< const char > > tokens ) {
 	if( !G_ISGHOSTING( ent ) ) {
 		edict_t * event = G_PositionedSound( ent->s.origin, CHAN_AUTO, "sounds/typewriter/return" );
 		event->s.ownerNum = ent->s.number;
@@ -325,7 +325,7 @@ static void Cmd_SayTeam_f( edict_t * ent ) {
 	G_Say_Team( ent, Cmd_Args(), true );
 }
 
-static void Cmd_Clack_f( edict_t * ent ) {
+static void Cmd_Clack_f( edict_t * ent, Span< Span< const char > > tokens ) {
 	bool space = StrCaseEqual( Cmd_Argv( 0 ), "typewriterspace" );
 	if( !G_ISGHOSTING( ent ) ) {
 		StringHash sound = space ? StringHash( "sounds/typewriter/space" ) : StringHash( "sounds/typewriter/clack" );
@@ -335,7 +335,7 @@ static void Cmd_Clack_f( edict_t * ent ) {
 	}
 }
 
-static void Cmd_Spray_f( edict_t * ent ) {
+static void Cmd_Spray_f( edict_t * ent, Span< Span< const char > > tokens ) {
 	if( G_ISGHOSTING( ent ) )
 		return;
 
@@ -386,7 +386,7 @@ static const g_vsays_t g_vsays[] = {
 	{ NULL, 0 }
 };
 
-static void G_vsay_f( edict_t *ent ) {
+static void G_vsay_f( edict_t * ent, Span< Span< const char > > tokens ) {
 	if( G_ISGHOSTING( ent ) && server_gs.gameState.match_state < MatchState_PostMatch ) {
 		return;
 	}
@@ -413,7 +413,7 @@ static void G_vsay_f( edict_t *ent ) {
 	G_PrintMsg( ent, "Unknown vsay %s", Cmd_Argv( 1 ) );
 }
 
-static void Cmd_Join_f( edict_t *ent ) {
+static void Cmd_Join_f( edict_t * ent, Span< Span< const char > > tokens ) {
 	if( CheckFlood( ent, false ) ) {
 		return;
 	}
@@ -421,7 +421,7 @@ static void Cmd_Join_f( edict_t *ent ) {
 	G_Teams_Join_Cmd( ent );
 }
 
-static void Cmd_Timeout_f( edict_t *ent ) {
+static void Cmd_Timeout_f( edict_t * ent, Span< Span< const char > > tokens ) {
 	int num;
 
 	if( ent->s.team == TEAM_SPECTATOR || server_gs.gameState.match_state != MatchState_Playing ) {
@@ -462,7 +462,7 @@ static void Cmd_Timeout_f( edict_t *ent ) {
 	level.timeout.endtime = level.timeout.time + TIMEOUT_TIME + FRAMETIME;
 }
 
-static void Cmd_Timein_f( edict_t *ent ) {
+static void Cmd_Timein_f( edict_t * ent, Span< Span< const char > > tokens ) {
 	int num;
 
 	if( ent->s.team == TEAM_SPECTATOR ) {
@@ -505,13 +505,12 @@ static void Cmd_Timein_f( edict_t *ent ) {
 //	client commands
 //===========================================================
 
-typedef struct
-{
+struct g_gamecommands_t {
 	char name[MAX_CONFIGSTRING_CHARS];
 	gamecommandfunc_t func;
-} g_gamecommands_t;
+};
 
-g_gamecommands_t g_Commands[MAX_GAMECOMMANDS];
+static g_gamecommands_t g_Commands[MAX_GAMECOMMANDS];
 
 void G_PrecacheGameCommands() {
 	for( int i = 0; i < MAX_GAMECOMMANDS; i++ ) {
@@ -529,7 +528,7 @@ void G_AddCommand( const char *name, gamecommandfunc_t callback ) {
 		if( StrCaseEqual( g_Commands[i].name, name ) ) {
 			// update func if different
 			if( g_Commands[i].func != callback ) {
-				g_Commands[i].func = ( gamecommandfunc_t )callback;
+				g_Commands[i].func = callback;
 			}
 			return;
 		}
@@ -538,7 +537,7 @@ void G_AddCommand( const char *name, gamecommandfunc_t callback ) {
 	assert( i < MAX_GAMECOMMANDS );
 
 	// we don't have it, add it
-	g_Commands[i].func = ( gamecommandfunc_t )callback;
+	g_Commands[i].func = callback;
 	Q_strncpyz( g_Commands[i].name, name, sizeof( g_Commands[i].name ) );
 
 	// add the configstring if the precache process was already done
@@ -587,7 +586,7 @@ void G_InitGameCommands() {
 	G_AddCommand( "vsay", G_vsay_f );
 }
 
-void ClientCommand( edict_t *ent ) {
+void ClientCommand( edict_t * ent ) {
 	if( !ent->r.client || PF_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED ) {
 		return; // not fully in game yet
 	}

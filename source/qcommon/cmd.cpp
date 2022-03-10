@@ -38,7 +38,7 @@ static ConsoleCommand * FindCommand( const char * name ) {
 
 static Span< Span< const char > > TokenizeString( Allocator * a, Span< const char > str ) {
 	NonRAIIDynamicArray< Span< const char > > tokens;
-	results.init( a );
+	tokens.init( a );
 
 	while( true ) {
 		Span< const char > token = ParseToken( &str, Parse_StopOnNewLine );
