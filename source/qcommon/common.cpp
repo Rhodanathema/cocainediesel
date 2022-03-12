@@ -205,7 +205,7 @@ void Com_Error( const char *format, ... ) {
 	longjmp( abortframe, -1 );
 }
 
-void Com_DeferQuit() {
+void Com_DeferQuit( const char * args, Span< const char > tokens ) {
 	com_quit = true;
 }
 

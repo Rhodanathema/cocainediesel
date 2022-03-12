@@ -248,13 +248,13 @@ static char * MakeObituary( Allocator * a, RNG * rng, int type, DamageType damag
 }
 
 void CG_SC_Obituary( Span< Span< const char > > tokens ) {
-	int victimNum = atoi( Cmd_Argv( 1 ) );
-	int attackerNum = atoi( Cmd_Argv( 2 ) );
-	int topAssistorNum = atoi( Cmd_Argv( 3 ) );
+	int victimNum = SpanToInt( tokens[ 1 ], 0 );
+	int attackerNum = SpanToInt( tokens[ 2 ], 0 );
+	int topAssistorNum = SpanToInt( tokens[ 3 ], 0 );
 	DamageType damage_type;
-	damage_type.encoded = atoi( Cmd_Argv( 4 ) );
-	bool wallbang = atoi( Cmd_Argv( 5 ) ) == 1;
-	u64 entropy = SpanToU64( MakeSpan( Cmd_Argv( 6 ) ), 0 );
+	damage_type.encoded = SpanToInt( tokens[ 4 ], 0 );
+	bool wallbang = SpanToInt( tokens[ 5 ], 0 ) == 1;
+	u64 entropy = SpanToU64( tokens[ 6 ], 0 );
 
 	const char * victim = PlayerName( victimNum - 1 );
 	const char * attacker = attackerNum == 0 ? NULL : PlayerName( attackerNum - 1 );

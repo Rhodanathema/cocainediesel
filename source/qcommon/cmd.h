@@ -9,10 +9,10 @@ bool Cmd_ExecuteLine( Span< const char > line, bool warn_on_invalid );
 void Cmd_ExecuteLine( const char * line );
 
 template< typename... Rest >
-bool Cmd_Execute( const char * fmt, const Rest & ... rest ) {
+void Cmd_Execute( const char * fmt, const Rest & ... rest ) {
 	char buf[ 1024 ];
 	ggformat( buf, sizeof( buf ), fmt, rest... );
-	return Cmd_ExecuteLine( buf, false );
+	Cmd_ExecuteLine( buf );
 }
 
 void Cmd_ExecuteEarlyCommands( int argc, char ** argv );

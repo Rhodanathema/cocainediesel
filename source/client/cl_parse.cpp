@@ -187,74 +187,65 @@ static void CL_ParseFrame( msg_t *msg ) {
 	}
 }
 
-static void CL_UpdateConfigString( int idx, const char *s ) {
+static void CL_UpdateConfigString( size_t idx, Span< const char > str ) {
 	if( cl_debug_serverCmd->integer && ( cls.state >= CA_ACTIVE || cls.demo.playing ) ) {
-		Com_Printf( "CL_ParseConfigstringCommand(%i): \"%s\"\n", idx, s );
+		Com_GGPrint( "CL_ParseConfigstringCommand({}): \"{}\"", idx, str );
 	}
 
-	if( idx < 0 || idx >= MAX_CONFIGSTRINGS ) {
-		Com_Error( "configstring > MAX_CONFIGSTRINGS" );
+	if( idx >= MAX_CONFIGSTRINGS ) {
+		Com_Error( "configstring >= MAX_CONFIGSTRINGS" );
 	}
 
 	// wsw : jal : warn if configstring overflow
-	if( strlen( s ) >= MAX_CONFIGSTRING_CHARS ) {
-		Com_Printf( "%sWARNING:%s Configstring %i overflowed\n", S_COLOR_YELLOW, S_COLOR_WHITE, idx );
-		Com_Printf( "%s%s\n", S_COLOR_WHITE, s );
+	if( str.n >= MAX_CONFIGSTRING_CHARS ) {
+		Com_GGPrint( "{}WARNING:{} Configstring {} overflowed", S_COLOR_YELLOW, S_COLOR_WHITE, idx );
+		Com_GGPrint( "{}{}", S_COLOR_WHITE, str );
 	}
 
-	Q_strncpyz( cl.configstrings[idx], s, sizeof( cl.configstrings[idx] ) );
+	ggformat( cl.configstrings[ idx ], sizeof( cl.configstrings[ idx ] ), "{}", str );
 
 	// allow cgame to update it too
 	CL_GameModule_ConfigString( idx );
 }
 
-static void CL_RequestMore( ClientCommandType command ) {
+static void CL_RequestMore( ClientCommandType command, Span< Span< const char > > tokens ) {
 	if( cls.demo.playing ) {
 		return;
 	}
 
 	if( cls.state != CA_CONNECTED && cls.state != CA_ACTIVE ) {
-		Com_Printf( "Can't \"%s\", not connected\n", Cmd_Argv( 0 ) );
+		Com_GGPrint( "Can't \"{}\", not connected", tokens[ 0 ] );
 		return;
 	}
 
 	msg_t * args = CL_AddReliableCommand( command );
-	MSG_WriteInt32( args, atoi( Cmd_Argv( 1 ) ) );
-	MSG_WriteUint32( args, atoi( Cmd_Argv( 2 ) ) );
+	MSG_WriteInt32( args, SpanToInt( tokens[ 1 ], 0 ) );
+	MSG_WriteUint32( args, SpanToInt( tokens[ 2 ], 0 ) );
 }
 
-static void CL_RequestMoreBaselines() {
-	CL_RequestMore( ClientCommand_Baselines );
+static void CL_RequestMoreBaselines( Span< Span< const char > > tokens ) {
+	CL_RequestMore( ClientCommand_Baselines, tokens );
 }
 
-static void CL_RequestMoreConfigstrings() {
-	CL_RequestMore( ClientCommand_ConfigStrings );
+static void CL_RequestMoreConfigstrings( Span< Span< const char > > tokens ) {
+	CL_RequestMore( ClientCommand_ConfigStrings, tokens );
 }
 
-static void CL_ParseConfigstringCommand() {
-	int i, argc, idx;
-	const char *s;
-
-	if( Cmd_Argc() < 3 ) {
+static void CL_ParseConfigstringCommand( Span< Span< const char > > tokens ) {
+	if( tokens.n % 2 == 0 ) {
 		return;
 	}
 
-	// ch : configstrings may come batched now, so lets loop through them
-	argc = Cmd_Argc();
-	for( i = 1; i < argc - 1; i += 2 ) {
-		idx = atoi( Cmd_Argv( i ) );
-		s = Cmd_Argv( i + 1 );
-
-		CL_UpdateConfigString( idx, s );
+	for( size_t i = 1; i < tokens.n; i += 2 ) {
+		size_t idx = SpanToU64( tokens[ i ], 0 );
+		CL_UpdateConfigString( idx, tokens[ i + 1 ] );
 	}
 }
 
-typedef struct {
-	const char *name;
-	void ( *func )();
-} svcmd_t;
-
-static svcmd_t svcmds[] = {
+static const struct {
+	const char * name;
+	void ( *func )( Span< Span< const char > > tokens );
+} svcmds[] = {
 	{ "forcereconnect", CL_Reconnect_f },
 	{ "reconnect", CL_ServerReconnect_f },
 	{ "changing", CL_Changing_f },
@@ -263,33 +254,26 @@ static svcmd_t svcmds[] = {
 	{ "configstrings", CL_RequestMoreConfigstrings },
 	{ "cs", CL_ParseConfigstringCommand },
 	{ "disconnect", CL_ServerDisconnect_f },
-
-	{ NULL, NULL }
 };
 
-static void CL_ParseServerCommand( msg_t *msg ) {
-	const char *s;
-	char *text;
-	svcmd_t *cmd;
+static void CL_ParseServerCommand( msg_t * msg ) {
+	TempAllocator = cls.frame_arena.temp();
 
-	text = MSG_ReadString( msg );
-
-	Cmd_TokenizeString( text );
-	s = Cmd_Argv( 0 );
+	const char * text = MSG_ReadString( msg );
+	Span< Span< const char > > tokens = TokenizeString( &temp, text );
 
 	if( cl_debug_serverCmd->integer && ( cls.state < CA_ACTIVE || cls.demo.playing ) ) {
 		Com_Printf( "CL_ParseServerCommand: \"%s\"\n", text );
 	}
 
-	// filter out these server commands to be called from the client
-	for( cmd = svcmds; cmd->name; cmd++ ) {
-		if( StrEqual( s, cmd->name ) ) {
-			cmd->func();
+	for( auto cmd : svcmds ) {
+		if( StrEqual( cmd.name, tokens[ 0 ] ) ) {
+			cmd.func( tokens );
 			return;
 		}
 	}
 
-	Com_Printf( "Unknown server command: %s\n", s );
+	Com_GGPrint( "Unknown server command: {}", tokens[ 0 ] );
 }
 
 /*

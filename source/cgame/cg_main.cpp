@@ -155,7 +155,7 @@ void CG_Reset() {
 	memset( cg_entities, 0, sizeof( cg_entities ) );
 }
 
-static void PrintMap() {
+static void PrintMap( const char * args, Span< const char > tokens ) {
 	Com_Printf( "Current map: %s\n", cl.map == NULL ? "null" : cl.map->name );
 }
 

@@ -910,7 +910,7 @@ static void GameMenuButton( const char * label, const char * command, bool * cli
 
 static void SendLoadout() {
 	TempAllocator temp = cls.frame_arena.temp();
-	Cbuf_Add( "setloadout {}", loadout );
+	Cmd_Execute( "setloadout {}", loadout );
 }
 
 static Vec4 RGBA8ToVec4NosRGB( RGBA8 rgba ) {
