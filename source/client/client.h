@@ -161,7 +161,6 @@ struct client_static_t {
 	NetAddress rconaddress;       // address where we are sending rcon messages, to ignore other print packets
 
 	char * download_url;              // http://<httpaddress>/
-	bool download_url_is_game_server;
 
 	bool rejected;          // these are used when the server rejects our connection
 	char rejectmessage[80];
@@ -176,10 +175,17 @@ struct client_static_t {
 	const Material * white_material;
 
 	// these are our reliable messages that go to the server
-	int64_t reliableSequence;          // the last one we put in the list to be sent
-	int64_t reliableSent;              // the last one we sent to the server
-	int64_t reliableAcknowledge;       // the last one the server has executed
-	char reliableCommands[MAX_RELIABLE_COMMANDS][MAX_STRING_CHARS];
+	size_t reliableSequence;          // the last one we put in the list to be sent
+	size_t reliableSent;              // the last one we sent to the server
+	size_t reliableAcknowledge;       // the last one the server has executed
+
+	struct ReliableCommand {
+		ClientCommandType command;
+		u8 args_buf[ MAX_STRING_CHARS ];
+		msg_t args;
+	};
+
+	ReliableCommand reliableCommands[ MAX_RELIABLE_COMMANDS ];
 
 	// reliable messages received from server
 	int64_t lastExecutedServerCommand;          // last server command grabbed or executed with CL_GetServerCommand
@@ -192,8 +198,6 @@ struct client_static_t {
 	// times when we got/sent last valid packets from/to server
 	int64_t lastPacketSentTime;
 	int64_t lastPacketReceivedTime;
-
-	char session[MAX_INFO_VALUE];
 
 	ImFont * huge_font;
 	ImFont * large_font;
@@ -233,8 +237,7 @@ extern SyncEntityState cl_baselines[MAX_EDICTS];
 //
 void CL_Init();
 
-void CL_UpdateClientCommandsToServer( msg_t *msg );
-void CL_AddReliableCommand( const char *cmd );
+msg_t * CL_AddReliableCommand( ClientCommandType command );
 void CL_Netchan_Transmit( msg_t *msg );
 void CL_SendMessagesToServer( bool sendNow );
 void CL_RestartTimeDeltas( int newTimeDelta );
@@ -288,7 +291,7 @@ void CL_WriteUcmdsToMessage( msg_t *msg );
 //
 // cl_demo.c
 //
-void CL_WriteDemoMessage( msg_t *msg );
+void CL_WriteDemoMessage( const msg_t * msg, size_t offset );
 void CL_DemoCompleted();
 void CL_PlayDemo_f();
 void CL_YoloDemo_f();

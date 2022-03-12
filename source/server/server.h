@@ -85,8 +85,6 @@ struct game_command_t {
 
 #define LATENCY_COUNTS  16
 
-#define HTTP_CLIENT_SESSION_SIZE 16
-
 struct client_t {
 	sv_client_state_t state;
 
@@ -124,7 +122,6 @@ struct client_t {
 	int ping;
 	edict_t *edict;                 // EDICT_NUM(clientnum+1)
 	char name[MAX_INFO_VALUE];      // extracted from userinfo, high bits masked
-	char session[HTTP_CLIENT_SESSION_SIZE];  // session id for HTTP requests
 
 	client_snapshot_t snapShots[UPDATE_BACKUP]; // updates can be delta'd from here
 
@@ -348,7 +345,7 @@ void SV_Demo_Cancel_f();
 void SV_Demo_Purge_f();
 
 void SV_DemoList_f( edict_t * ent );
-void SV_DemoGetUrl_f( edict_t * ent );
+void SV_DemoGetUrl_f( edict_t * ent, msg_t args );
 
 #define SV_SetDemoMetaKeyValue( k,v ) svs.demo.meta_data_realsize = SNAP_SetDemoMetaKeyValue( svs.demo.meta_data, sizeof( svs.demo.meta_data ), svs.demo.meta_data_realsize, k, v )
 

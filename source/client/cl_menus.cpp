@@ -767,12 +767,6 @@ static void MainMenu() {
 
 	ImGui::BeginChild( "mainmenubody", ImVec2( 0, -ImGui::GetFrameHeightWithSpacing() + window_padding.y ) );
 
-	auto triangel = []( s64 x, s64 period ) {
-		float normalized = float( x % period ) / period;
-		return normalized < 0.5f ? Unlerp( 0.0f, normalized, 0.5f ) : Unlerp( 1.0f, normalized, 0.5f );
-	};
-
-	// ImGui::SetCursorPosX( 40.0f * triangel( cls.monotonicTime, 331 ) );
 	u32 ukraine_blue = IM_COL32( 0, 87, 183, 255 );
 	u32 ukraine_yellow = IM_COL32( 255, 215, 0, 255 );
 	ImGui::PushFont( cls.large_font );
@@ -916,7 +910,7 @@ static void GameMenuButton( const char * label, const char * command, bool * cli
 
 static void SendLoadout() {
 	TempAllocator temp = cls.frame_arena.temp();
-	Cbuf_Add( "weapselect {}", loadout );
+	Cbuf_Add( "setloadout {}", loadout );
 }
 
 static Vec4 RGBA8ToVec4NosRGB( RGBA8 rgba ) {
@@ -1119,10 +1113,10 @@ static void GameMenu() {
 			}
 
 
-			GameMenuButton( "Spectate", "chase", &should_close );
+			GameMenuButton( "Spectate", "spectate", &should_close );
 
 			if( team_based ) {
-				GameMenuButton( "Change weapons", "gametypemenu", &should_close );
+				GameMenuButton( "Change weapons", "loadoutmenu", &should_close );
 			}
 		}
 

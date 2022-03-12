@@ -80,13 +80,6 @@ bool SV_ClientConnect( const NetAddress & address, client_t * client, char * use
 	Q_strncpyz( client->userinfo, userinfo, sizeof( client->userinfo ) );
 	SV_UserinfoChanged( client );
 
-	// generate session id
-	for( size_t i = 0; i < sizeof( client->session ) - 1; i++ ) {
-		const char symbols[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-		client->session[i] = RandomElement( &svs.rng, symbols );
-	}
-	client->session[ sizeof( client->session ) - 1 ] = '\0';
-
 	return true;
 }
 
@@ -155,7 +148,7 @@ CLIENT COMMAND EXECUTION
 * Sends the first message from the server to a connected client.
 * This will be sent on the initial connection and upon each server load.
 */
-static void SV_New_f( client_t * client, Span< Span< const char > > tokens ) {
+static void SV_New_f( client_t *client, msg_t args ) {
 	// if in CS_AWAITING we have sent the response packet the new once already,
 	// but client might have not got it so we send it again
 	if( client->state >= CS_SPAWNED ) {
@@ -199,7 +192,7 @@ static void SV_New_f( client_t * client, Span< Span< const char > > tokens ) {
 	client->state = CS_CONNECTING;
 }
 
-static void SV_Configstrings_f( client_t * client, Span< Span< const char > > tokens ) {
+static void SV_Configstrings_f( client_t *client, msg_t args ) {
 	if( client->state == CS_CONNECTING ) {
 		client->state = CS_CONNECTED;
 	}
@@ -210,38 +203,45 @@ static void SV_Configstrings_f( client_t * client, Span< Span< const char > > to
 	}
 
 	// handle the case of a level changing while a client was connecting
-	if( SpanToInt( tokens[ 1 ] ) != svs.spawncount ) {
+	int adsf = MSG_ReadInt32( &args );
+	if( adsf != svs.spawncount ) {
 		Com_Printf( "SV_Configstrings_f from different level\n" );
 		SV_SendServerCommand( client, "reconnect" );
 		return;
 	}
 
-	for( size_t i = 0; i < MAX_CONFIGSTRINGS; i++ ) {
-		if( !StrEqual( sv.configstrings[ i ], "" ) ) {
-			SV_SendServerCommand( client, "cs %i \"%s\"", start, sv.configstrings[ i ] );
+	u32 start = MSG_ReadUint32( &args );
+
+	// write a packet full of data
+	while( start < MAX_CONFIGSTRINGS &&
+		   client->reliableSequence - client->reliableAcknowledge < MAX_RELIABLE_COMMANDS - 8 ) {
+		if( sv.configstrings[start][0] ) {
+			SV_SendServerCommand( client, "cs %i \"%s\"", start, sv.configstrings[start] );
 		}
 	}
 
-	SV_SendServerCommand( client, "cmd baselines %i", svs.spawncount );
+	// send next command
+	if( start == MAX_CONFIGSTRINGS ) {
+		SV_SendServerCommand( client, "baselines %i 0", svs.spawncount );
+	} else {
+		SV_SendServerCommand( client, "configstrings %i %i", svs.spawncount, start );
+	}
 }
 
-static void SV_Baselines_f( client_t * client, Span< Span< const char > > tokens ) {
+static void SV_Baselines_f( client_t *client, msg_t args ) {
 	if( client->state != CS_CONNECTED ) {
 		Com_Printf( "baselines not valid -- already spawned\n" );
 		return;
 	}
 
 	// handle the case of a level changing while a client was connecting
-	if( atoi( tokens[ 1 ] ) != svs.spawncount ) {
+	if( MSG_ReadInt32( &args ) != svs.spawncount ) {
 		Com_Printf( "SV_Baselines_f from different level\n" );
-		SV_New_f( client );
+		SV_New_f( client, args );
 		return;
 	}
 
-	int start = atoi( tokens[ 2 ] );
-	if( start < 0 ) {
-		start = 0;
-	}
+	u32 start = MSG_ReadUint32( &args );
 
 	SyncEntityState nullstate;
 	memset( &nullstate, 0, sizeof( nullstate ) );
@@ -262,14 +262,14 @@ static void SV_Baselines_f( client_t * client, Span< Span< const char > > tokens
 	if( start == MAX_EDICTS ) {
 		SV_SendServerCommand( client, "precache %i \"%s\"", svs.spawncount, sv.mapname );
 	} else {
-		SV_SendServerCommand( client, "cmd baselines %i %i", svs.spawncount, start );
+		SV_SendServerCommand( client, "baselines %i %i", svs.spawncount, start );
 	}
 
 	SV_AddReliableCommandsToMessage( client, &tmpMessage );
 	SV_SendMessageToClient( client, &tmpMessage );
 }
 
-static void SV_Begin_f( client_t * client, Span< Span< const char > > tokens ) {
+static void SV_Begin_f( client_t *client, msg_t args ) {
 	// wsw : r1q2[start] : could be abused to respawn or cause spam/other mod-specific problems
 	if( client->state != CS_CONNECTED ) {
 		if( is_dedicated_server ) {
@@ -281,7 +281,7 @@ static void SV_Begin_f( client_t * client, Span< Span< const char > > tokens ) {
 	// wsw : r1q2[end]
 
 	// handle the case of a level changing while a client was connecting
-	if( SpanToInt( tokens[ 1 ] ) != svs.spawncount ) {
+	if( MSG_ReadInt32( &args ) != svs.spawncount ) {
 		Com_Printf( "SV_Begin_f from different level\n" );
 		SV_SendServerCommand( client, "changing" );
 		SV_SendServerCommand( client, "reconnect" );
@@ -296,21 +296,18 @@ static void SV_Begin_f( client_t * client, Span< Span< const char > > tokens ) {
 
 //=============================================================================
 
-static void SV_Disconnect_f( client_t * client, Span< Span< const char > > tokens ) {
+static void SV_Disconnect_f( client_t *client, msg_t args ) {
 	SV_DropClient( client, NULL );
 }
 
-static void SV_UserinfoCommand_f( client_t * client, Span< Span< const char > > tokens ) {
-	const char *info;
-	int64_t time;
-
-	info = Cmd_Argv( 1 );
+static void SV_UserinfoCommand_f( client_t *client, msg_t args ) {
+	const char * info = MSG_ReadString( &args );
 	if( !Info_Validate( info ) ) {
 		SV_DropClient( client, "%s", "Error: Invalid userinfo" );
 		return;
 	}
 
-	time = Sys_Milliseconds();
+	s64 time = Sys_Milliseconds();
 	if( client->userinfoLatchTimeout > time ) {
 		Q_strncpyz( client->userinfoLatched, info, sizeof( client->userinfo ) );
 	} else {
@@ -323,41 +320,34 @@ static void SV_UserinfoCommand_f( client_t * client, Span< Span< const char > > 
 	}
 }
 
-static void SV_NoDelta_f( client_t * client, Span< Span< const char > > tokens ) {
+static void SV_NoDelta_f( client_t *client, msg_t args ) {
 	client->nodelta = true;
 	client->nodelta_frame = 0;
 	client->lastframe = -1; // jal : I'm not sure about this. Seems like it's missing but...
 }
 
-struct ucmd_t {
-	const char * name;
-	void ( * func )( client_t * client, Span< Span< const char > > tokens );
+static const struct {
+	ClientCommandType command;
+	void ( *callback )( client_t * client, msg_t args );
+} ucmds[] = {
+	{ ClientCommand_New, SV_New_f },
+	{ ClientCommand_ConfigStrings, SV_Configstrings_f },
+	{ ClientCommand_Baselines, SV_Baselines_f },
+	{ ClientCommand_Begin, SV_Begin_f },
+	{ ClientCommand_Disconnect, SV_Disconnect_f },
+	{ ClientCommand_UserInfo, SV_UserinfoCommand_f },
+	{ ClientCommand_NoDelta, SV_NoDelta_f },
 };
 
-static ucmd_t ucmds[] = {
-	{ "new", SV_New_f },
-	{ "configstrings", SV_Configstrings_f },
-	{ "baselines", SV_Baselines_f },
-	{ "begin", SV_Begin_f },
-	{ "disconnect", SV_Disconnect_f },
-	{ "usri", SV_UserinfoCommand_f },
-	{ "nodelta", SV_NoDelta_f },
-};
-
-static void SV_ExecuteUserCommand( client_t * client, const char * s ) {
-	Span< Span< const char > > tokens = TokenizeString( str );
-	if( tokens.n == 0 )
-		return;
-
-	for( ucmd_t cmd : ucmds ) {
-		if( StrEqual( tokens[ 0 ], cmd.name ) ) {
-			cmd.func( client, tokens );
-			return;
+static void SV_ExecuteUserCommand( client_t * client, ClientCommandType command, msg_t args ) {
+	for( auto ucmd : ucmds ) {
+		if( ucmd.command == command ) {
+			ucmd.callback( client, args );
 		}
 	}
 
 	if( client->state >= CS_SPAWNED && sv.state == ss_game ) {
-		ClientCommand( client->edict, tokens );
+		ClientCommand( client->edict, command, args );
 	}
 }
 
@@ -491,16 +481,13 @@ static void SV_ParseMoveCommand( client_t *client, msg_t *msg ) {
 }
 
 void SV_ParseClientMessage( client_t *client, msg_t *msg ) {
-	char *s;
-	bool move_issued;
-	int64_t cmdNum;
-
 	if( !msg ) {
 		return;
 	}
 
 	// only allow one move command
-	move_issued = false;
+	bool move_issued = false;
+
 	while( msg->readcount < msg->cursize ) {
 		int c = MSG_ReadUint8( msg );
 		switch( c ) {
@@ -518,7 +505,7 @@ void SV_ParseClientMessage( client_t *client, msg_t *msg ) {
 			} break;
 
 			case clc_svcack: {
-				cmdNum = MSG_ReadIntBase128( msg );
+				int cmdNum = MSG_ReadIntBase128( msg );
 				if( cmdNum < client->reliableAcknowledge || cmdNum > client->reliableSent ) {
 					//SV_DropClient( client, "%s", "Error: bad server command acknowledged" );
 					return;
@@ -527,14 +514,16 @@ void SV_ParseClientMessage( client_t *client, msg_t *msg ) {
 			} break;
 
 			case clc_clientcommand: {
-				cmdNum = MSG_ReadIntBase128( msg );
+				int cmdNum = MSG_ReadIntBase128( msg );
 				if( cmdNum <= client->clientCommandExecuted ) {
-					s = MSG_ReadString( msg ); // read but ignore
+					MSG_ReadUint8( msg );
+					MSG_ReadMsg( msg );
 					continue;
 				}
 				client->clientCommandExecuted = cmdNum;
-				s = MSG_ReadString( msg );
-				SV_ExecuteUserCommand( client, s );
+				ClientCommandType command = ClientCommandType( MSG_ReadUint8( msg ) ); // TODO: check in range
+				msg_t args = MSG_ReadMsg( msg );
+				SV_ExecuteUserCommand( client, command, args );
 				if( client->state == CS_ZOMBIE ) {
 					return; // disconnect command
 				}

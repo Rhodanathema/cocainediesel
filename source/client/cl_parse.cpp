@@ -62,16 +62,7 @@ bool CL_DownloadFile( const char * filename, DownloadCompleteCallback callback )
 	TempAllocator temp = cls.frame_arena.temp();
 
 	const char * url = temp( "{}/{}", cls.download_url, filename );
-	if( cls.download_url_is_game_server ) {
-		const char * headers[] = {
-			temp( "X-Client: {}", cl.playernum ),
-			temp( "X-Session: {}", cls.session ),
-		};
-		StartDownload( url, OnDownloadDone, headers, ARRAY_COUNT( headers ) );
-	}
-	else {
-		StartDownload( url, OnDownloadDone, NULL, 0 );
-	}
+	StartDownload( url, OnDownloadDone, NULL, 0 );
 
 	Com_Printf( "Downloading %s\n", url );
 
@@ -119,17 +110,17 @@ static void CL_ParseServerData( msg_t *msg ) {
 	cl.playernum = MSG_ReadInt16( msg );
 
 	const char * download_url = MSG_ReadString( msg );
-	if( strlen( download_url ) > 0 ) {
+	if( !StrEqual( download_url, "" ) ) {
 		cls.download_url = CopyString( sys_allocator, download_url );
-		cls.download_url_is_game_server = false;
 	}
 	else {
 		cls.download_url = CopyString( sys_allocator, temp( "http://{}", cls.serveraddress ) );
-		cls.download_url_is_game_server = true;
 	}
 
 	// get the configstrings request
-	CL_AddReliableCommand( temp( "configstrings {}", cl.servercount ) );
+	msg_t * args = CL_AddReliableCommand( ClientCommand_ConfigStrings );
+	MSG_WriteInt32( args, cl.servercount );
+	MSG_WriteUint32( args, 0 );
 }
 
 static void CL_ParseBaseline( msg_t *msg ) {
@@ -217,7 +208,7 @@ static void CL_UpdateConfigString( int idx, const char *s ) {
 	CL_GameModule_ConfigString( idx );
 }
 
-static void CL_ForwardToServer_f() {
+static void CL_RequestMore( ClientCommandType command ) {
 	if( cls.demo.playing ) {
 		return;
 	}
@@ -227,10 +218,17 @@ static void CL_ForwardToServer_f() {
 		return;
 	}
 
-	// don't forward the first argument
-	if( Cmd_Argc() > 1 ) {
-		CL_AddReliableCommand( Cmd_Args() );
-	}
+	msg_t * args = CL_AddReliableCommand( command );
+	MSG_WriteInt32( args, atoi( Cmd_Argv( 1 ) ) );
+	MSG_WriteUint32( args, atoi( Cmd_Argv( 2 ) ) );
+}
+
+static void CL_RequestMoreBaselines() {
+	CL_RequestMore( ClientCommand_Baselines );
+}
+
+static void CL_RequestMoreConfigstrings() {
+	CL_RequestMore( ClientCommand_ConfigStrings );
 }
 
 static void CL_ParseConfigstringCommand() {
@@ -261,7 +259,8 @@ static svcmd_t svcmds[] = {
 	{ "reconnect", CL_ServerReconnect_f },
 	{ "changing", CL_Changing_f },
 	{ "precache", CL_Precache_f },
-	{ "cmd", CL_ForwardToServer_f },
+	{ "baselines", CL_RequestMoreBaselines },
+	{ "configstrings", CL_RequestMoreConfigstrings },
 	{ "cs", CL_ParseConfigstringCommand },
 	{ "disconnect", CL_ServerDisconnect_f },
 
@@ -308,6 +307,8 @@ void CL_ParseServerMessage( msg_t *msg ) {
 		Com_Printf( "------------------\n" );
 	}
 
+	size_t msg_header_offset = msg->readcount;
+
 	// parse the message
 	while( msg->readcount < msg->cursize ) {
 		int cmd = MSG_ReadUint8( msg );
@@ -340,9 +341,9 @@ void CL_ParseServerMessage( msg_t *msg ) {
 					break;
 				}
 				cls.lastExecutedServerCommand = cmdNum;
-			}
+				CL_ParseServerCommand( msg );
+			} break;
 
-			// fall through
 			case svc_servercs: // configstrings from demo files. they don't have acknowledge
 				CL_ParseServerCommand( msg );
 				break;
@@ -419,6 +420,6 @@ void CL_ParseServerMessage( msg_t *msg ) {
 	// after we have parsed the frame
 	//
 	if( cls.demo.recording && !cls.demo.waiting ) {
-		CL_WriteDemoMessage( msg );
+		CL_WriteDemoMessage( msg, msg_header_offset );
 	}
 }
