@@ -88,30 +88,6 @@ static void Cmd_Noclip_f( edict_t * ent, msg_t args ) {
 	G_PrintMsg( ent, "%s", msg );
 }
 
-static void Cmd_GameOperator_f( edict_t * ent, msg_t args ) {
-	if( StrEqual( g_operator_password->value, "" ) ) {
-		G_PrintMsg( ent, "Operator is disabled in this server\n" );
-		return;
-	}
-
-	const char * password = MSG_ReadString( &args );
-	if( StrEqual( password, "" ) ) {
-		G_PrintMsg( ent, "Usage: op <password>\n" );
-		return;
-	}
-
-	if( StrEqual( password, g_operator_password->value ) ) {
-		if( !ent->r.client->isoperator ) {
-			G_PrintMsg( NULL, "%s" S_COLOR_WHITE " is now a game operator\n", ent->r.client->netname );
-		}
-
-		ent->r.client->isoperator = true;
-		return;
-	}
-
-	G_PrintMsg( ent, "Incorrect operator password.\n" );
-}
-
 static void Cmd_Kill_f( edict_t * ent, msg_t args ) {
 	if( ent->r.solid == SOLID_NOT ) {
 		return;
@@ -495,18 +471,15 @@ void G_InitGameCommands() {
 	G_AddCommand( ClientCommand_Spectate, []( edict_t * ent, msg_t args ) { Cmd_Spectate( ent ); } );
 	G_AddCommand( ClientCommand_ChaseNext, Cmd_ChaseNext_f );
 	G_AddCommand( ClientCommand_ChasePrev, Cmd_ChasePrev_f );
-	G_AddCommand( ClientCommand_ToggleFreeFly, []( edict_t * ent, msg_t args ) { Cmd_ToggleFreeFly( ent ); } );
+	G_AddCommand( ClientCommand_ToggleFreeFly, Cmd_ToggleFreeFly );
 	G_AddCommand( ClientCommand_Timeout, Cmd_Timeout_f );
 	G_AddCommand( ClientCommand_Timein, Cmd_Timein_f );
-	G_AddCommand( ClientCommand_DemoList, []( edict_t * ent, msg_t args ) { SV_DemoList_f( ent ); } );
+	G_AddCommand( ClientCommand_DemoList, SV_DemoList_f );
 	G_AddCommand( ClientCommand_DemoGetURL, SV_DemoGetUrl_f );
 
 	// callvotes commands
 	G_AddCommand( ClientCommand_Callvote, G_CallVote_Cmd );
 	G_AddCommand( ClientCommand_Vote, G_CallVotes_CmdVote );
-
-	G_AddCommand( ClientCommand_Operator, Cmd_GameOperator_f );
-	G_AddCommand( ClientCommand_OpCall, G_OperatorVote_Cmd );
 
 	// teams commands
 	G_AddCommand( ClientCommand_Ready, []( edict_t * ent, msg_t args ) { G_Match_Ready( ent ); } );

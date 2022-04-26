@@ -55,7 +55,7 @@ void SV_Demo_WriteSnap() {
 	}
 	if( i == sv_maxclients->integer ) { // FIXME
 		Com_Printf( "No players left, stopping server side demo recording\n" );
-		SV_Demo_Stop_f();
+		SV_Demo_Stop( true );
 		return;
 	}
 
@@ -95,8 +95,8 @@ static void SV_Demo_InitClient() {
 	demo_client.nodelta = false;
 }
 
-void SV_Demo_Start_f() {
-	if( Cmd_Argc() < 2 ) {
+void SV_Demo_Start_f( const char * args, Span< Span< const char > > tokens ) {
+	if( tokens.n < 2 ) {
 		Com_Printf( "Usage: serverrecord <demoname>\n" );
 		return;
 	}
@@ -123,13 +123,13 @@ void SV_Demo_Start_f() {
 		return;
 	}
 
-	if( !COM_ValidateRelativeFilename( Cmd_Argv( 1 ) ) ) {
+	if( !COM_ValidateRelativeFilename( tokens[ 1 ] ) ) {
 		Com_Printf( "Invalid filename.\n" );
 		return;
 	}
 
 	TempAllocator temp = svs.frame_arena.temp();
-	char * filename = temp( "{}/{}.cddemo", GetDemoDir( &temp ), Cmd_Argv( 1 ) );
+	char * filename = temp( "{}/{}.cddemo", GetDemoDir( &temp ), tokens[ 1 ] );
 	COM_SanitizeFilePath( filename );
 
 	Com_Printf( "Recording server demo: %s\n", filename );
@@ -175,7 +175,7 @@ void SV_Demo_Stop( bool silent ) {
 	SNAP_FreeClientFrames( &demo_client );
 }
 
-void SV_Demo_Stop_f() {
+void SV_Demo_Stop_f( const char * args, Span< Span< const char > > tokens ) {
 	SV_Demo_Stop( false );
 }
 
@@ -241,7 +241,7 @@ void SV_Demo_Purge_f() {
 	}
 }
 
-void SV_DemoList_f( edict_t * ent ) {
+void SV_DemoList_f( edict_t * ent, msg_t args ) {
 	TempAllocator temp = svs.frame_arena.temp();
 	Span< char * > demos = GetServerDemos( &temp );
 	defer {
@@ -264,13 +264,13 @@ void SV_DemoList_f( edict_t * ent ) {
 }
 
 void SV_DemoGetUrl_f( edict_t * ent, msg_t args ) {
-	Cmd_TokenizeString( MSG_ReadString( &args ) );
+	TempAllocator temp = svs.frame_arena.temp();
 
-	if( Cmd_Argc() != 2 ) {
+	Span< Span< const char > > tokens = TokenizeString( &temp, MSG_ReadString( &args ) );
+	if( tokens.n != 2 ) {
 		return;
 	}
 
-	TempAllocator temp = svs.frame_arena.temp();
 	Span< char * > demos = GetServerDemos( &temp );
 	defer {
 		for( char * demo : demos ) {
@@ -278,9 +278,8 @@ void SV_DemoGetUrl_f( edict_t * ent, msg_t args ) {
 		}
 	};
 
-	Span< const char > arg = MakeSpan( Cmd_Argv( 1 ) );
-	int id;
-	if( !TrySpanToInt( arg, &id ) || id <= 0 || id > demos.n ) {
+	u64 id;
+	if( !TrySpanToU64( tokens[ 1 ], &id ) || id > demos.n ) {
 		PF_GameCmd( ent, "pr \"demoget <id from demolist>\"\n" );
 		return;
 	}

@@ -18,7 +18,7 @@ void Cmd_Execute( const char * fmt, const Rest & ... rest ) {
 void Cmd_ExecuteEarlyCommands( int argc, char ** argv );
 void Cmd_ExecuteLateCommands( int argc, char ** argv );
 
-using ConsoleCommandCallback = void ( * )( const char * args, Span< const char > tokens );
+using ConsoleCommandCallback = void ( * )( const char * args, Span< Span< const char > > tokens );
 using TabCompletionCallback = Span< const char * > ( * )( TempAllocator * a, const char * partial );
 
 void AddCommand( const char * name, ConsoleCommandCallback function );

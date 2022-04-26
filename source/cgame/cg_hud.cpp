@@ -1525,7 +1525,9 @@ void CG_InitHUD() {
 	hud_L = NULL;
 	show_inspector = false;
 
-	AddCommand( "toggleuiinspector", []() { show_inspector = !show_inspector; } );
+	AddCommand( "toggleuiinspector", []( const char * args, Span< Span< const char > > tokens ) {
+		show_inspector = !show_inspector;
+	} );
 
 	size_t bytecode_size;
 	char * bytecode = luau_compile( AssetString( "hud/hud.lua" ).ptr, AssetBinary( "hud/hud.lua" ).n, NULL, &bytecode_size );

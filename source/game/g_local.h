@@ -138,7 +138,6 @@ extern Vec3 knockbackOfDeath;
 extern int damageFlagsOfDeath;
 
 extern Cvar *sv_password;
-extern Cvar *g_operator_password;
 
 extern Cvar *g_maxvelocity;
 
@@ -388,7 +387,7 @@ void G_UseGadget( edict_t * ent, GadgetType gadget, u64 parm );
 //
 void G_ChasePlayer( edict_t * ent );
 void G_ChaseStep( edict_t * ent, int step );
-void Cmd_ToggleFreeFly( edict_t * ent );
+void Cmd_ToggleFreeFly( edict_t * ent, msg_t args );
 void Cmd_Spectate( edict_t * ent );
 void G_EndServerFrames_UpdateChaseCam();
 
@@ -627,7 +626,6 @@ struct gclient_t {
 	bool connecting;
 
 	int team;
-	bool isoperator;
 
 	UserCommand ucmd;
 	int timeDelta;              // time offset to adjust for shots collision (antilag)

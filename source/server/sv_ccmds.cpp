@@ -22,14 +22,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon/fs.h"
 #include "qcommon/maplist.h"
 
-
-//===============================================================================
-//
-//OPERATOR CONSOLE ONLY COMMANDS
-//
-//These commands can only be entered from stdin or by a remote operator datagram
-//===============================================================================
-
 /*
 * SV_Map_f
 *
@@ -37,20 +29,20 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 * map: restart game, and start map
 * devmap: restart game, enable cheats, and start map
 */
-static void SV_Map_f() {
-	if( Cmd_Argc() < 2 ) {
-		Com_Printf( "Usage: %s <map>\n", Cmd_Argv( 0 ) );
+static void SV_Map_f( const char * args, Span< Span< const char > > tokens ) {
+	if( tokens.n < 2 ) {
+		Com_GGPrint( "Usage: {} <map>", tokens[ 0 ] );
 		return;
 	}
 
 	TempAllocator temp = svs.frame_arena.temp();
 
-	const char * map = Cmd_Argv( 1 );
+	Span< const char > map = tokens[ 1 ];
 	const char * bsp_path = temp( "{}/base/maps/{}.bsp", RootDirPath(), map );
 	const char * zst_path = temp( "{}.zst", bsp_path );
 
 	if( !FileExists( &temp, bsp_path ) && !FileExists( &temp, zst_path ) ) {
-		Com_Printf( "Couldn't find map: %s\n", map );
+		Com_GGPrint( "Couldn't find map: {}", map );
 		return;
 	}
 

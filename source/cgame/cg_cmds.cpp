@@ -88,7 +88,7 @@ static void CG_Cmd_DemoGet_f() {
 	demo_requested = true;
 }
 
-static void CG_SC_DownloadDemo() {
+static void CG_SC_DownloadDemo( const char * args, Span< Span< const char > > tokens ) {
 	if( cgs.demoPlaying ) {
 		// ignore download commands coming from demo files
 		return;
@@ -101,12 +101,12 @@ static void CG_SC_DownloadDemo() {
 
 	demo_requested = false;
 
-	if( Cmd_Argc() < 2 ) {
+	if( tokens.n < 2 ) {
 		Com_Printf( "Invalid demo ID\n" );
 		return;
 	}
 
-	const char * filename = Cmd_Argv( 1 );
+	Span< const char > filename = tokens[ 1 ];
 	Span< const char > extension = FileExtension( filename );
 	if( !COM_ValidateRelativeFilename( filename ) || extension != APP_DEMO_EXTENSION_STR ) {
 		Com_Printf( "Warning: demoget: Invalid filename, ignored\n" );
@@ -131,42 +131,42 @@ static void CG_SC_DownloadDemo() {
 	} );
 }
 
-static void CG_SC_ChangeLoadout() {
+static void CG_SC_ChangeLoadout( const char * args, Span< Span< const char > > tokens ) {
 	if( cgs.demoPlaying )
 		return;
 
 	Loadout loadout = { };
 
-	if( Cmd_Argc() != ARRAY_COUNT( loadout.weapons ) + 3 )
+	if( tokens.n != ARRAY_COUNT( loadout.weapons ) + 3 )
 		return;
 
 	for( size_t i = 0; i < ARRAY_COUNT( loadout.weapons ); i++ ) {
-		int weapon = atoi( Cmd_Argv( i + 1 ) );
-		if( weapon <= Weapon_None || weapon >= Weapon_Count )
+		u64 weapon = SpanToU64( tokens[ i + 1 ], Weapon_Count );
+		if( weapon == Weapon_None || weapon >= Weapon_Count )
 			return;
 		loadout.weapons[ i ] = WeaponType( weapon );
 	}
 
-	int perk = atoi( Cmd_Argv( ARRAY_COUNT( loadout.weapons ) + 1 ) );
-	if( perk < Perk_None || perk >= Perk_Count )
+	u64 perk = SpanToU64( tokens[ ARRAY_COUNT( loadout.weapons ) + 1 ], Perk_Count );
+	if( perk >= Perk_Count )
 		return;
 	loadout.perk = PerkType( perk );
 
-	int gadget = atoi( Cmd_Argv( ARRAY_COUNT( loadout.weapons ) + 2 ) );
-	if( gadget <= Gadget_None || gadget >= Gadget_Count )
+	u64 gadget = SpanToU64( tokens[ ARRAY_COUNT( loadout.weapons ) + 2 ], Gadget_Count );
+	if( gadget == Gadget_None || gadget >= Gadget_Count )
 		return;
 	loadout.gadget = GadgetType( gadget );
 
 	UI_ShowLoadoutMenu( loadout );
 }
 
-static void CG_SC_SaveLoadout() {
-	Cvar_Set( "cg_loadout", Cmd_Args() );
+static void CG_SC_SaveLoadout( const char * args, Span< Span< const char > > tokens ) {
+	Cvar_Set( "cg_loadout", args );
 }
 
 struct ServerCommand {
 	const char * name;
-	void ( *func )( Span< Span< const char > > tokens );
+	void ( *func )( const char * args, Span< Span< const char > > tokens );
 };
 
 static const ServerCommand server_commands[] = {
@@ -337,8 +337,6 @@ static const ClientToServerCommand game_commands_yes_args[] = {
 	{ "say_team", ClientCommand_SayTeam },
 	{ "callvote", ClientCommand_Callvote },
 	{ "vote", ClientCommand_Vote },
-	{ "op", ClientCommand_Operator },
-	{ "opcall", ClientCommand_OpCall },
 	{ "join", ClientCommand_Join },
 	{ "vsay", ClientCommand_Vsay },
 	{ "setloadout", ClientCommand_SetLoadout },

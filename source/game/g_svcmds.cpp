@@ -25,12 +25,12 @@ static void Cmd_ConsoleSay_f( const char * args, Span< Span< const char > > toke
 }
 
 static void Cmd_ConsoleKick_f( const char * args, Span< Span< const char > > tokens ) {
-	if( Cmd_Argc() != 2 ) {
+	if( tokens.n != 2 ) {
 		Com_Printf( "Usage: kick <id or name>\n" );
 		return;
 	}
 
-	edict_t * ent = G_PlayerForText( Cmd_Argv( 1 ) );
+	edict_t * ent = G_PlayerForText( tokens[ 1 ] );
 	if( !ent ) {
 		Com_Printf( "No such player\n" );
 		return;

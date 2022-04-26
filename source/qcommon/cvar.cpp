@@ -221,22 +221,13 @@ Span< const char * > SearchCvars( Allocator * a, const char * partial ) {
 	return results.span();
 }
 
-/*
-* Cvar_Command
-*
-* Handles variable inspection and changing from the console
-*
-* Called by Cmd_ExecuteString when Cmd_Argv(0) doesn't match a known
-* command.  Returns true if the command was a variable reference that
-* was handled. (print or change)
-*/
-bool Cvar_Command() {
-	Cvar * cvar = FindCvar( Cmd_Argv( 0 ) );
+bool Cvar_Command( Span< Span< const char > > tokens ) {
+	Cvar * cvar = FindCvar( tokens[ 0 ] );
 	if( cvar == NULL )
 		return false;
 
-	if( Cmd_Argc() > 1 ) {
-		Cvar_Set( Cmd_Argv( 0 ), Cmd_Argv( 1 ) );
+	if( tokens.n > 1 ) {
+		Cvar_Set( tokens[ 0 ], tokens[ 1 ] );
 	}
 	else {
 		Com_Printf( "\"%s\" is \"%s\" default: \"%s\"\n", cvar->name, cvar->value, cvar->default_value );

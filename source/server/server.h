@@ -325,11 +325,11 @@ void SV_LocateEntities( edict_t *edicts, int num_edicts, int max_edicts );
 void SV_Demo_WriteSnap();
 void SV_Demo_AddServerCommand( const char * command );
 void SV_Demo_Stop( bool silent );
-void SV_Demo_Start_f();
-void SV_Demo_Stop_f();
-void SV_Demo_Purge_f();
+void SV_Demo_Start_f( const char * args, Span< Span< const char > > tokens );
+void SV_Demo_Stop_f( const char * args, Span< Span< const char > > tokens );
+void SV_Demo_Purge_f( const char * args, Span< Span< const char > > tokens );
 
-void SV_DemoList_f( edict_t * ent );
+void SV_DemoList_f( edict_t * ent, msg_t args );
 void SV_DemoGetUrl_f( edict_t * ent, msg_t args );
 
 //

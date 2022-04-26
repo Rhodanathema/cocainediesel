@@ -476,17 +476,19 @@ Mat4 TransformKToDir( Vec3 dir ) {
 }
 
 MinMax3 Union( MinMax3 bounds, Vec3 p ) {
-	return MinMax3(
-		Vec3( Min2( bounds.mins.x, p.x ), Min2( bounds.mins.y, p.y ), Min2( bounds.mins.z, p.z ) ),
-		Vec3( Max2( bounds.maxs.x, p.x ), Max2( bounds.maxs.y, p.y ), Max2( bounds.maxs.z, p.z ) )
-	);
+	for( int i = 0; i < 3; i++ ) {
+		bounds.mins[ i ] = Min2( bounds.mins[ i ], p[ i ] );
+		bounds.maxs[ i ] = Max2( bounds.maxs[ i ], p[ i ] );
+	}
+	return bounds;
 }
 
 MinMax3 Union( MinMax3 a, MinMax3 b ) {
-	return MinMax3(
-		Vec3( Min2( a.mins.x, b.mins.x ), Min2( a.mins.y, b.mins.y ), Min2( a.mins.z, b.mins.z ) ),
-		Vec3( Max2( a.maxs.x, b.maxs.x ), Max2( a.maxs.y, b.maxs.y ), Max2( a.maxs.z, b.maxs.z ) )
-	);
+	for( int i = 0; i < 3; i++ ) {
+		a.mins[ i ] = Min2( a.mins[ i ], b.mins[ i ] );
+		a.maxs[ i ] = Max2( a.maxs[ i ], b.maxs[ i ] );
+	}
+	return a;
 }
 
 bool PlaneFrom3Points( Plane * plane, Vec3 a, Vec3 b, Vec3 c ) {

@@ -21,8 +21,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "game/g_local.h"
 #include <algorithm>
 
-Cvar *g_teams_maxplayers;
-Cvar *g_teams_allow_uneven;
+Cvar * g_teams_maxplayers;
+Cvar * g_teams_allow_uneven;
 
 void G_Teams_Init() {
 	g_teams_maxplayers = NewCvar( "g_teams_maxplayers", "0", CvarFlag_Archive );
@@ -132,7 +132,7 @@ static bool G_Teams_CanKeepEvenTeam( int leaving, int joining ) {
 	return server_gs.gameState.teams[ joining ].num_players + 1 == min || Abs( max - min ) <= 1;
 }
 
-static int G_GameTypes_DenyJoinTeam( edict_t *ent, int team ) {
+static int G_GameTypes_DenyJoinTeam( edict_t * ent, int team ) {
 	if( team < 0 || team >= GS_MAX_TEAMS ) {
 		Com_Printf( "WARNING: 'G_GameTypes_CanJoinTeam' parsing a unrecognized team value\n" );
 		return ER_TEAM_INVALID;
@@ -160,7 +160,7 @@ static int G_GameTypes_DenyJoinTeam( edict_t *ent, int team ) {
 	return ER_TEAM_OK;
 }
 
-bool G_Teams_JoinTeam( edict_t *ent, int team ) {
+bool G_Teams_JoinTeam( edict_t * ent, int team ) {
 	int error;
 
 	G_Teams_UpdateMembersList(); // make sure we have up-to-date data
@@ -182,7 +182,7 @@ bool G_Teams_JoinTeam( edict_t *ent, int team ) {
 	return true;
 }
 
-bool G_Teams_JoinAnyTeam( edict_t *ent, bool silent ) {
+bool G_Teams_JoinAnyTeam( edict_t * ent, bool silent ) {
 	G_Teams_UpdateMembersList(); // make sure we have up-to-date data
 
 	if( !level.gametype.isTeamBased ) {

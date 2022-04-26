@@ -424,8 +424,6 @@ enum ClientCommandType : u8 {
 	ClientCommand_DemoGetURL,
 	ClientCommand_Callvote,
 	ClientCommand_Vote,
-	ClientCommand_Operator,
-	ClientCommand_OpCall,
 	ClientCommand_Ready,
 	ClientCommand_Unready,
 	ClientCommand_ToggleReady,

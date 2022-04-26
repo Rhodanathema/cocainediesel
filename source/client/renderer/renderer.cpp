@@ -40,7 +40,7 @@ static ShadowQuality last_shadow_quality;
 static Cvar * r_samples;
 static Cvar * r_shadow_quality;
 
-static void TakeScreenshot( const char * args, Span< const char > tokens ) {
+static void TakeScreenshot( const char * args, Span< Span< const char > > tokens ) {
 	RGB8 * framebuffer = ALLOC_MANY( sys_allocator, RGB8, frame_static.viewport_width * frame_static.viewport_height );
 	defer { FREE( sys_allocator, framebuffer ); };
 	DownloadFramebuffer( framebuffer );

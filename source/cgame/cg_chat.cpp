@@ -33,9 +33,9 @@ struct Chat {
 
 static Chat chat;
 
-static void OpenChat() {
+static void OpenChat( const char * args, Span< Span< const char > > tokens ) {
 	if( !CL_DemoPlaying() ) {
-		bool team = StrCaseEqual( Cmd_Argv( 0 ), "messagemode2" );
+		bool team = StrCaseEqual( tokens[ 0 ], "messagemode2" );
 		chat.mode = team ? ChatMode_SayTeam : ChatMode_Say;
 		chat.input[ 0 ] = '\0';
 		chat.scroll_to_bottom = true;

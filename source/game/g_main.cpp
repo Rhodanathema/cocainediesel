@@ -29,8 +29,6 @@ Vec3 knockbackOfDeath;
 int damageFlagsOfDeath;
 
 Cvar *sv_password;
-Cvar *g_operator_password;
-Cvar *g_select_empty;
 
 Cvar *g_maxvelocity;
 
