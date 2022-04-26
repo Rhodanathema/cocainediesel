@@ -164,7 +164,7 @@ static void SV_New_f( client_t *client, msg_t args ) {
 
 	// send the serverdata
 	MSG_WriteUint8( &tmpMessage, svc_serverdata );
-	MSG_WriteInt32( &tmpMessage, APP_PROTOCOL_VERSION );
+	MSG_WriteUint32( &tmpMessage, APP_PROTOCOL_VERSION );
 	MSG_WriteInt32( &tmpMessage, svs.spawncount );
 	MSG_WriteInt16( &tmpMessage, (unsigned short)svc.snapFrameTime );
 
@@ -203,8 +203,7 @@ static void SV_Configstrings_f( client_t *client, msg_t args ) {
 	}
 
 	// handle the case of a level changing while a client was connecting
-	int adsf = MSG_ReadInt32( &args );
-	if( adsf != svs.spawncount ) {
+	if( MSG_ReadInt32( &args ) != svs.spawncount ) {
 		Com_Printf( "SV_Configstrings_f from different level\n" );
 		SV_SendServerCommand( client, "reconnect" );
 		return;

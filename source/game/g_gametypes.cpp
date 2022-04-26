@@ -24,13 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 Cvar *g_warmup_timelimit;
 Cvar *g_scorelimit;
 
-static void G_Match_SetAutorecordState( const char *state ) {
-	PF_ConfigString( CS_AUTORECORDSTATE, state );
-}
-
 void G_Match_Autorecord_Start() {
-	G_Match_SetAutorecordState( "start" );
-
 	if( !g_autorecord->integer )
 		return;
 
@@ -60,22 +54,12 @@ void G_Match_Autorecord_Start() {
 }
 
 void G_Match_Autorecord_Stop() {
-	G_Match_SetAutorecordState( "stop" );
-
 	if( g_autorecord->integer ) {
 		Cmd_Execute( "serverrecordstop 1" );
 
 		if( g_autorecord_maxdemos->integer > 0 ) {
 			Cmd_Execute( "serverrecordpurge" );
 		}
-	}
-}
-
-void G_Match_Autorecord_Cancel() {
-	G_Match_SetAutorecordState( "cancel" );
-
-	if( g_autorecord->integer ) {
-		Cmd_Execute( "serverrecordcancel 1" );
 	}
 }
 
@@ -119,7 +103,6 @@ static void G_Match_CheckStateAbort() {
 		if( any ) {
 			G_ClearCenterPrint( NULL );
 		}
-		G_Match_Autorecord_Cancel();
 		G_Match_LaunchState( MatchState_Warmup );
 		G_GamestatSetFlag( GAMESTAT_FLAG_WAITING, true );
 	}
@@ -134,11 +117,6 @@ static void G_Match_CheckStateAbort() {
 }
 
 void G_Match_LaunchState( MatchState matchState ) {
-	// give the gametype a chance to refuse the state change, or to set up things for it
-	if( !GT_CallMatchStateFinished( matchState ) ) {
-		return;
-	}
-
 	G_GamestatSetFlag( GAMESTAT_FLAG_WAITING, false );
 
 	if( matchState == MatchState_PostMatch ) {
@@ -160,6 +138,8 @@ void G_Match_LaunchState( MatchState matchState ) {
 			break;
 
 		case MatchState_Playing:
+			G_Match_Autorecord_Start();
+
 			server_gs.gameState.match_state = MatchState_Playing;
 			server_gs.gameState.match_duration = 0;
 			server_gs.gameState.match_state_start_time = svs.gametime;
@@ -174,6 +154,8 @@ void G_Match_LaunchState( MatchState matchState ) {
 			break;
 
 		case MatchState_WaitExit:
+			G_Match_Autorecord_Stop();
+
 			server_gs.gameState.match_state = MatchState_WaitExit;
 			server_gs.gameState.match_duration = 3000;
 			server_gs.gameState.match_state_start_time = svs.gametime;
@@ -465,10 +447,6 @@ Span< const char > G_GetWorldspawnKey( const char * key ) {
 
 void GT_CallMatchStateStarted() {
 	level.gametype.MatchStateStarted();
-}
-
-bool GT_CallMatchStateFinished( MatchState incomingMatchState ) {
-	return level.gametype.MatchStateFinished( incomingMatchState );
 }
 
 void GT_CallPlayerConnected( edict_t * ent ) {

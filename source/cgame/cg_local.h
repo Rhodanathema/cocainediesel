@@ -74,7 +74,7 @@ struct centity_t {
 	Vec3 microSmoothOrigin2;
 
 	// effects
-	ImmediateSoundHandle sound;
+	PlayingSFXHandle sound;
 	Vec3 trailOrigin;         // for particle trails
 
 	// local effects from events timers
@@ -85,14 +85,15 @@ struct centity_t {
 	Vec3 laserPoint;
 	Vec3 laserOriginOld;
 	Vec3 laserPointOld;
-	ImmediateSoundHandle lg_hum_sound;
-	ImmediateSoundHandle lg_beam_sound;
-	ImmediateSoundHandle lg_tip_sound;
+	PlayingSFXHandle lg_hum_sound;
+	PlayingSFXHandle lg_beam_sound;
+	PlayingSFXHandle lg_tip_sound;
 
 	bool jetpack_boost;
-	ImmediateSoundHandle jetpack_sound;
+	PlayingSFXHandle jetpack_sound;
 
-	ImmediateSoundHandle vsay_sound;
+	PlayingSFXHandle playing_body_sound;
+	PlayingSFXHandle playing_vsay;
 
 	bool linearProjectileCanDraw;
 	Vec3 linearProjectileViewerSource;
@@ -268,7 +269,7 @@ void CG_RegisterMedia();
 // cg_players.c
 //
 float CG_PlayerPitch( int entnum );
-void CG_PlayerSound( int entnum, int entchannel, PlayerSound ps );
+void CG_PlayerSound( int entnum, PlayerSound ps, bool stop_current );
 
 //
 // cg_predict.c
@@ -339,10 +340,6 @@ bool CG_ScoreboardShown();
 extern Cvar *cg_showClamp;
 
 // wsw
-extern Cvar *cg_autoaction_demo;
-extern Cvar *cg_autoaction_screenshot;
-extern Cvar *cg_autoaction_spectator;
-
 extern Cvar *cg_projectileAntilagOffset;
 
 extern Cvar *cg_showServerDebugPrints;
@@ -367,9 +364,7 @@ const char * PlayerName( int i );
 //
 // cg_svcmds.c
 //
-void CG_ConfigString( int idx );
 void CG_GameCommand( const char *command );
-void CG_SC_AutoRecordAction( const char *action );
 
 //
 // cg_teams.c
@@ -461,7 +456,7 @@ void CG_DrawChat();
 void CG_InitInput();
 void CG_ShutdownInput();
 void CG_ClearInputState();
-void CG_MouseMove( int frameTime, Vec2 m );
+void CG_MouseMove( Vec2 m );
 u8 CG_GetButtonBits();
 u8 CG_GetButtonDownEdges();
 Vec3 CG_GetDeltaViewAngles();

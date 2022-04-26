@@ -25,12 +25,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon/fs.h"
 #include "qcommon/maplist.h"
 #include "qcommon/threads.h"
-#include "qcommon/version.h"
 
 #include <errno.h>
 #include <setjmp.h>
 
-static bool com_quit;
+static bool quitting;
 
 static jmp_buf abortframe;     // an ERR_DROP occured, exit the entire frame
 
@@ -47,7 +46,6 @@ static FILE * log_file = NULL;
 
 static server_state_t server_state = ss_dead;
 static connstate_t client_state = CA_UNINITIALIZED;
-static bool demo_playing = false;
 
 /*
 ============================================================================
@@ -127,7 +125,7 @@ static void Com_ReopenConsoleLog() {
 	Com_CloseConsoleLog( false, false );
 
 	if( logconsole && logconsole->value && logconsole->value[0] ) {
-		const char * mode = logconsole_append && logconsole_append->integer ? "a" : "w";
+		OpenFileMode mode = logconsole_append && logconsole_append->integer ? OpenFile_AppendOverwrite : OpenFile_WriteOverwrite;
 		log_file = OpenFile( sys_allocator, logconsole->value, mode );
 		if( log_file == NULL ) {
 			snprintf( errmsg, sizeof( errmsg ), "Couldn't open log file: %s (%s)\n", logconsole->value, strerror( errno ) );
@@ -206,7 +204,7 @@ void Com_Error( const char *format, ... ) {
 }
 
 void Com_DeferQuit( const char * args, Span< const char > tokens ) {
-	com_quit = true;
+	quitting = true;
 }
 
 server_state_t Com_ServerState() {
@@ -225,14 +223,6 @@ void Com_SetClientState( connstate_t state ) {
 	client_state = state;
 }
 
-bool Com_DemoPlaying() {
-	return demo_playing;
-}
-
-void Com_SetDemoPlaying( bool state ) {
-	demo_playing = state;
-}
-
 //============================================================================
 
 void Key_Init();
@@ -240,6 +230,8 @@ void Key_Shutdown();
 
 void Qcommon_Init( int argc, char ** argv ) {
 	TracyZoneScoped;
+
+	quitting = false;
 
 	if( !is_public_build ) {
 		EnableFPE();
@@ -250,7 +242,6 @@ void Qcommon_Init( int argc, char ** argv ) {
 	com_print_mutex = NewMutex();
 
 	InitFS();
-	FS_Init();
 	Cmd_Init();
 	Cvar_Init();
 	Key_Init(); // need to be able to bind keys before running configs
@@ -328,7 +319,7 @@ bool Qcommon_Frame( unsigned int realMsec ) {
 	SV_Frame( realMsec, gameMsec );
 	CL_Frame( realMsec, gameMsec );
 
-	return !com_quit;
+	return !quitting;
 }
 
 void Qcommon_Shutdown() {
@@ -347,7 +338,6 @@ void Qcommon_Shutdown() {
 
 	Com_CloseConsoleLog( true, true );
 
-	FS_Shutdown();
 	ShutdownFS();
 
 	ShutdownCSPRNG();

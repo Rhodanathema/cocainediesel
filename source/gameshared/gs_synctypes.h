@@ -105,10 +105,10 @@ void operator++( GadgetType & x, int );
 enum PerkType : u8 {
 	Perk_None,
 
-	Perk_Ninja,
 	Perk_Hooligan,
 	Perk_Midget,
 	Perk_Jetpack,
+	Perk_Ninja,
 	Perk_Boomer,
 
 	Perk_Count
@@ -281,9 +281,9 @@ struct SyncEntityState {
 	StringHash material;
 	RGBA8 color;
 
-	int channel;                    // ET_SOUNDEVENT
+	bool positioned_sound; // ET_SOUNDEVENT
 
-	int ownerNum;                   // ET_EVENT specific
+	int ownerNum; // ET_EVENT specific
 
 	unsigned int effects;
 

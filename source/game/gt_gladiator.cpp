@@ -480,13 +480,13 @@ static void GT_Gladiator_PlayerKilled( edict_t * victim, edict_t * attacker, edi
 	if( gladiator_state.state > GladiatorRoundState_None && gladiator_state.state < GladiatorRoundState_Post ) {
 		AddLoser( PLAYERNUM( victim ) );
 		if( victim->velocity.z < -1600.0f && victim->health < 100 ) {
-			G_GlobalSound( CHAN_AUTO, "sounds/gladiator/smackdown" );
+			G_GlobalSound( "sounds/gladiator/smackdown" );
 		}
 	}
 
 	if( gladiator_state.state == GladiatorRoundState_Pre ) {
 		G_ClientGetStats( victim )->score--;
-		G_LocalSound( victim, CHAN_AUTO, "sounds/gladiator/ouch" );
+		G_LocalSound( victim, "sounds/gladiator/ouch" );
 	}
 }
 
@@ -501,18 +501,6 @@ static void GT_Gladiator_ThinkRules() {
 	}
 
 	Think();
-}
-
-static bool GT_Gladiator_MatchStateFinished( MatchState incomingMatchState ) {
-	if( server_gs.gameState.match_state <= MatchState_Warmup && incomingMatchState > MatchState_Warmup && incomingMatchState < MatchState_PostMatch ) {
-		G_Match_Autorecord_Start();
-	}
-
-	if( server_gs.gameState.match_state == MatchState_PostMatch ) {
-		G_Match_Autorecord_Stop();
-	}
-
-	return true;
 }
 
 static void GT_Gladiator_MatchStateStarted() {
@@ -571,7 +559,6 @@ Gametype GetGladiatorGametype() {
 
 	gt.Init = GT_Gladiator_InitGametype;
 	gt.MatchStateStarted = GT_Gladiator_MatchStateStarted;
-	gt.MatchStateFinished = GT_Gladiator_MatchStateFinished;
 	gt.Think = GT_Gladiator_ThinkRules;
 	gt.PlayerRespawned = GT_Gladiator_PlayerRespawned;
 	gt.PlayerKilled = GT_Gladiator_PlayerKilled;

@@ -168,14 +168,11 @@ extern Cvar *g_autorecord;
 extern Cvar *g_autorecord_maxdemos;
 extern Cvar *g_allow_spectator_voting;
 
-void G_Teams_Join_Cmd( edict_t * ent );
+void G_Teams_Join_Cmd( edict_t * ent, msg_t args );
 bool G_Teams_JoinTeam( edict_t * ent, int team );
 void G_Teams_UpdateMembersList();
 bool G_Teams_JoinAnyTeam( edict_t * ent, bool silent );
 void G_Teams_SetTeam( edict_t * ent, int team );
-
-void Cmd_Say_f( edict_t * ent, bool arg0, bool checkflood );
-void G_Say_Team( edict_t *who, const char *inmsg, bool checkflood );
 
 void G_Match_Ready( edict_t * ent );
 void G_Match_NotReady( edict_t * ent );
@@ -269,10 +266,10 @@ void G_ClearCenterPrint( edict_t * ent );
 
 void G_DebugPrint( const char * format, ... );
 
-edict_t *G_Sound( edict_t *owner, int channel, StringHash sound );
-edict_t *G_PositionedSound( Vec3 origin, int channel, StringHash sound );
-void G_GlobalSound( int channel, StringHash sound );
-void G_LocalSound( edict_t *owner, int channel, StringHash sound );
+edict_t * G_Sound( edict_t * owner, StringHash sound );
+edict_t * G_PositionedSound( Vec3 origin, StringHash sound );
+void G_GlobalSound( StringHash sound );
+void G_LocalSound( edict_t * owner, StringHash sound );
 
 #define G_ISGHOSTING( x ) ( ( x )->r.solid == SOLID_NOT )
 
@@ -490,6 +487,13 @@ void G_ResetLevel();
 void G_InitLevel( const char *mapname, int64_t levelTime );
 void G_LoadMap( const char * name );
 
+struct EntityID {
+	u64 id;
+};
+
+EntityID NewEntity();
+void ResetEntityIDSequence();
+
 //============================================================================
 
 struct projectileinfo_t {
@@ -648,6 +652,8 @@ struct edict_t {
 	// EXPECTS THE FIELDS IN THAT ORDER!
 
 	//================================
+
+	EntityID id;
 
 	int linkcount;
 

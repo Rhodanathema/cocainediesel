@@ -34,7 +34,7 @@ static void CL_CreateNewUserCommand( int realMsec );
 */
 static void CL_UpdateGameInput( Vec2 movement, int frameTime ) {
 	if( cls.key_dest == key_game && cls.state == CA_ACTIVE ) {
-		CL_GameModule_MouseMove( frameTime, movement );
+		CL_GameModule_MouseMove( movement );
 		cl.viewangles += CG_GetDeltaViewAngles();
 	}
 }
@@ -76,8 +76,8 @@ static void CL_RefreshUcmd( UserCommand *ucmd, int msec, bool ready ) {
 	if( ucmd->msec && cls.key_dest == key_game ) {
 		Vec2 movement = CG_GetMovement();
 
-		ucmd->sidemove = movement.x;
-		ucmd->forwardmove = movement.y;
+		ucmd->sidemove = movement.x * 127.0f;
+		ucmd->forwardmove = movement.y * 127.0f;
 
 		ucmd->buttons |= CL_GameModule_GetButtonBits();
 		ucmd->down_edges |= CL_GameModule_GetButtonDownEdges();
@@ -111,7 +111,7 @@ void CL_WriteUcmdsToMessage( msg_t *msg ) {
 	unsigned int ucmdFirst;
 	unsigned int ucmdHead;
 
-	if( !msg || cls.state < CA_ACTIVE || cls.demo.playing ) {
+	if( !msg || cls.state < CA_ACTIVE || CL_DemoPlaying() ) {
 		return;
 	}
 
@@ -197,7 +197,7 @@ static bool CL_NextUserCommandTimeReached( int realMsec ) {
 	// the cvar is developer only
 	//clamp( maxucmds, 10, 90 ); // don't let people abuse cl_ucmdFPS
 
-	if( cls.demo.playing ) {
+	if( CL_DemoPlaying() ) {
 		minMsec = 1;
 	} else {
 		minMsec = ( 1000.0f / maxucmds );

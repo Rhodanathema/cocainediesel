@@ -68,15 +68,13 @@ struct cgame_export_t {
 
 	void ( *Shutdown )();
 
-	void ( *ConfigString )( int number );
-
 	void ( *EscapeKey )();
 
 	void ( *RenderView )( unsigned extrapolationTime );
 
 	bool ( *NewFrameSnapshot )( snapshot_t *newSnapshot, snapshot_t *currentSnapshot );
 
-	void ( *MouseMove )( int frameTime, Vec2 m );
+	void ( *MouseMove )( Vec2 m );
 
 	u8 ( *GetButtonBits )();
 	u8 ( *GetButtonDownEdges )();

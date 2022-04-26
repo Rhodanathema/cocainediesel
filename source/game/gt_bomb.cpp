@@ -232,6 +232,8 @@ static bool ParseLoadout( Loadout * loadout, const char * loadout_string ) {
 		int perk;
 		if( !TrySpanToInt( token, &perk ) || perk <= Perk_None || perk >= Perk_Count )
 			return false;
+		if( !GetPerkDef( PerkType( perk ) )->enabled )
+			return false;
 		loadout->perk = PerkType( perk );
 	}
 
@@ -545,7 +547,7 @@ static void BombStartPlanting( edict_t * carrier_ent, u32 site ) {
 	bomb_state.bomb.action_time = level.time;
 	bomb_state.bomb.state = BombState_Planting;
 
-	G_Sound( bomb_state.bomb.model, 0, "models/bomb/plant" );
+	G_Sound( bomb_state.bomb.model, "models/bomb/plant" );
 }
 
 static void BombPlanted() {
@@ -586,7 +588,7 @@ static void BombDefused() {
 	TempAllocator temp = svs.frame_arena.temp();
 	G_PrintMsg( NULL, "%s defused the bomb!\n", PLAYERENT( bomb_state.defuser )->r.client->netname );
 
-	G_Sound( bomb_state.bomb.model, CHAN_AUTO, "models/bomb/tss" );
+	G_Sound( bomb_state.bomb.model, "models/bomb/tss" );
 
 	RoundWonBy( DefendingTeam() );
 
@@ -611,7 +613,7 @@ static void BombExplode() {
 
 	G_SpawnEvent( EV_EXPLOSION1, bomb_explosion_effect_radius, &bomb_state.bomb.model->s.origin );
 
-	G_Sound( bomb_state.bomb.model, CHAN_AUTO, "models/bomb/explode" );
+	G_Sound( bomb_state.bomb.model, "models/bomb/explode" );
 }
 
 static void BombThink() {
@@ -1023,7 +1025,7 @@ static void RoundThink() {
 
 			constexpr StringHash vfx_bomb_respawn = "models/bomb/respawn";
 
-			G_Sound( bomb_state.bomb.model, CHAN_AUTO, "models/bomb/respawn" );
+			G_Sound( bomb_state.bomb.model, "models/bomb/respawn" );
 			G_SpawnEvent( EV_VFX, vfx_bomb_respawn.hash, &bomb_state.bomb.model->s.origin );
 
 			return;
@@ -1220,18 +1222,6 @@ static void GT_Bomb_Think() {
 	// GENERIC_UpdateMatchScore(); TODO
 }
 
-static bool GT_Bomb_MatchStateFinished( MatchState incomingMatchState ) {
-	if( server_gs.gameState.match_state <= MatchState_Warmup && incomingMatchState > MatchState_Warmup && incomingMatchState < MatchState_PostMatch ) {
-		G_Match_Autorecord_Start();
-	}
-
-	if( server_gs.gameState.match_state == MatchState_PostMatch ) {
-		G_Match_Autorecord_Stop();
-	}
-
-	return true;
-}
-
 static void GT_Bomb_MatchStateStarted() {
 	switch( server_gs.gameState.match_state ) {
 		case MatchState_Warmup:
@@ -1308,7 +1298,6 @@ Gametype GetBombGametype() {
 
 	gt.Init = GT_Bomb_InitGametype;
 	gt.MatchStateStarted = GT_Bomb_MatchStateStarted;
-	gt.MatchStateFinished = GT_Bomb_MatchStateFinished;
 	gt.Think = GT_Bomb_Think;
 	gt.PlayerConnected = GT_Bomb_PlayerConnected;
 	gt.PlayerRespawning = GT_Bomb_PlayerRespawning;

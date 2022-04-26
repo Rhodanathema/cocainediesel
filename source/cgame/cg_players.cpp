@@ -34,7 +34,7 @@ float CG_PlayerPitch( int entnum ) {
 	return 1.0f / ( Length( cg_entities[ entnum ].current.scale ) / basis );
 }
 
-void CG_PlayerSound( int entnum, int entchannel, PlayerSound ps ) {
+void CG_PlayerSound( int entnum, PlayerSound ps, bool stop_current ) {
 	StringHash sfx = GetPlayerSound( entnum, ps );
 
 	float pitch = 1.0f;
@@ -42,10 +42,18 @@ void CG_PlayerSound( int entnum, int entchannel, PlayerSound ps ) {
 		pitch = CG_PlayerPitch( entnum );
 	}
 
-	if( ISVIEWERENTITY( entnum ) ) {
-		S_StartGlobalSound( sfx, entchannel, 1.0f, pitch );
+	PlaySFXConfig config = PlaySFXConfigGlobal();
+	config.pitch = pitch;
+	if( !ISVIEWERENTITY( entnum ) ) {
+		config.spatialisation = SpatialisationMethod_Entity;
+		config.ent_num = entnum;
 	}
-	else {
-		S_StartEntitySound( sfx, entnum, entchannel, 1.0f, pitch );
+
+	PlayingSFXHandle handle = PlaySFX( sfx, config );
+
+	if( stop_current ) {
+		centity_t * cent = &cg_entities[ entnum ];
+		StopSFX( cent->playing_body_sound );
+		cent->playing_body_sound = handle;
 	}
 }

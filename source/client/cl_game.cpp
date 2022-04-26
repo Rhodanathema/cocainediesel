@@ -21,7 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "client/client.h"
 #include "cgame/cg_local.h"
 #include "qcommon/cmodel.h"
-#include "qcommon/version.h"
 
 static cgame_export_t *cge;
 
@@ -54,13 +53,12 @@ void CL_GetCurrentState( int64_t *incomingAcknowledged, int64_t *outgoingSequenc
 }
 
 void CL_GameModule_Init() {
-	// stop all playing sounds
-	S_StopAllSounds( true );
+	StopAllSounds( true );
 
 	CL_GameModule_Shutdown();
 
 	cge = GetCGameAPI();
-	cge->Init( cl.playernum, cls.demo.playing, cls.demo.playing ? cls.demo.filename : "", cl.snapFrameTime );
+	cge->Init( cl.playernum, CL_DemoPlaying(), "", cl.snapFrameTime );
 	cls.cgameActive = true;
 }
 
@@ -87,12 +85,6 @@ void CL_GameModule_EscapeKey() {
 	}
 }
 
-void CL_GameModule_ConfigString( int number ) {
-	if( cge ) {
-		cge->ConfigString( number );
-	}
-}
-
 bool CL_GameModule_NewSnapshot( int pendingSnapshot ) {
 	snapshot_t *currentSnap, *newSnap;
 
@@ -107,7 +99,7 @@ bool CL_GameModule_NewSnapshot( int pendingSnapshot ) {
 
 void CL_GameModule_RenderView() {
 	if( cge && cls.cgameActive ) {
-		cge->RenderView( cl_extrapolate->integer && !cls.demo.playing ? cl_extrapolationTime->integer : 0 );
+		cge->RenderView( cl_extrapolate->integer && !CL_DemoPlaying() ? cl_extrapolationTime->integer : 0 );
 	}
 }
 
@@ -125,8 +117,8 @@ u8 CL_GameModule_GetButtonDownEdges() {
 	return 0;
 }
 
-void CL_GameModule_MouseMove( int frameTime, Vec2 d ) {
+void CL_GameModule_MouseMove( Vec2 d ) {
 	if( cge ) {
-		cge->MouseMove( frameTime, d );
+		cge->MouseMove( d );
 	}
 }
