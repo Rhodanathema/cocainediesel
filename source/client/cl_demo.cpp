@@ -80,7 +80,7 @@ void CL_DemoBaseline( const snapshot_t * snap ) {
 	StartRecordingDemo( &temp, &record_demo_context, record_demo_filename, cl.servercount, cl.snapFrameTime, client_gs.maxclients, cl.configstrings[ 0 ], cl_baselines );
 }
 
-void CL_Record_f() {
+void CL_Record_f( const char * args, Span< Span< const char > > tokens ) {
 	if( cls.state != CA_ACTIVE ) {
 		Com_Printf( "You must be in a level to record.\n" );
 		return;
@@ -147,6 +147,10 @@ void CL_StopRecording( bool silent ) {
 	StopRecordingDemo( &temp, &record_demo_context, metadata );
 
 	record_demo_context = { };
+}
+
+void CL_Stop_f( const char * args, Span< Span< const char > > tokens ) {
+	CL_StopRecording( false );
 }
 
 static void FreeDemoMetadata() {
@@ -229,7 +233,7 @@ static void CL_StartDemo( const char * demoname, bool yolo ) {
 	CL_SetClientState( CA_HANDSHAKE );
 }
 
-void CL_PlayDemo_f() {
+void CL_PlayDemo_f( const char * args, Span< Span< const char > > tokens ) {
 	if( Cmd_Argc() < 2 ) {
 		Com_Printf( "demo <demoname>\n" );
 		return;
@@ -237,7 +241,7 @@ void CL_PlayDemo_f() {
 	CL_StartDemo( Cmd_Argv( 1 ), false );
 }
 
-void CL_YoloDemo_f() {
+void CL_YoloDemo_f( const char * args, Span< Span< const char > > tokens ) {
 	if( Cmd_Argc() < 2 ) {
 		Com_Printf( "demo <demoname>\n" );
 		return;
@@ -245,7 +249,7 @@ void CL_YoloDemo_f() {
 	CL_StartDemo( Cmd_Argv( 1 ), true );
 }
 
-void CL_PauseDemo_f() {
+void CL_PauseDemo_f( const char * args, Span< Span< const char > > tokens ) {
 	if( !CL_DemoPlaying() ) {
 		Com_Printf( "Can only demopause when playing a demo.\n" );
 		return;
@@ -254,7 +258,7 @@ void CL_PauseDemo_f() {
 	playing_demo_paused = !playing_demo_paused;
 }
 
-void CL_DemoJump_f() {
+void CL_DemoJump_f( const char * args, Span< Span< const char > > tokens ) {
 	if( !CL_DemoPlaying() ) {
 		Com_Printf( "Can only demojump when playing a demo\n" );
 		return;

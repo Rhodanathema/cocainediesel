@@ -39,13 +39,13 @@ static void Cmd_ConsoleKick_f( const char * args, Span< Span< const char > > tok
 	PF_DropClient( ent, "Kicked" );
 }
 
-static void Cmd_ConsoleKill_f() {
-	if( Cmd_Argc() != 2 ) {
+static void Cmd_ConsoleKill_f( const char * args, Span< Span< const char > > tokens ) {
+	if( tokens.n != 2 ) {
 		Com_Printf( "Usage: kill <bot id or name>\n" );
 		return;
 	}
 
-	edict_t * ent = G_PlayerForText( Cmd_Argv( 1 ) );
+	edict_t * ent = G_PlayerForText( tokens[ 1 ] );
 	if( ent == NULL ) {
 		Com_Printf( S_COLOR_YELLOW "No such player\n" );
 		return;

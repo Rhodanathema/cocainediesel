@@ -69,6 +69,9 @@ template< size_t N > bool operator==( const char ( &str )[ N ], Span< const char
 template< size_t N > bool operator!=( Span< const char > span, const char ( &str )[ N ] ) { return !( span == str ); }
 template< size_t N > bool operator!=( const char ( &str )[ N ], Span< const char > span ) { return !( span == str ); }
 
+const char * StrChr( Span< const char > str, char c );
+const char * StrRChr( Span< const char > str, char c );
+
 bool StartsWith( Span< const char > str, const char * prefix );
 bool StartsWith( const char * str, const char * prefix );
 bool EndsWith( Span< const char > str, const char * suffix );
@@ -128,7 +131,6 @@ STATIC_ASSERT( MAX_NAME_CHARS <= MAX_CONFIGSTRING_CHARS );
 void Q_strncpyz( char *dest, const char *src, size_t size );
 void Q_strncatz( char *dest, const char *src, size_t size );
 
-char *Q_strlwr( char *s );
 char *Q_trim( char *s );
 void RemoveTrailingZeroesFloat( char * str );
 
@@ -152,13 +154,3 @@ Span< const char > ParseWorldspawnKey( Span< const char > entities, const char *
 
 constexpr float S_DEFAULT_ATTENUATION_MAXDISTANCE = 8192.0f;
 constexpr float S_DEFAULT_ATTENUATION_REFDISTANCE = 250.0f;
-
-// connection state of the client in the server
-enum sv_client_state_t {
-	CS_FREE,            // can be reused for a new connection
-	CS_ZOMBIE,          // client has been disconnected, but don't reuse
-	                    // connection for a couple seconds
-	CS_CONNECTING,      // has send a "new" command, is awaiting for fetching configstrings
-	CS_CONNECTED,       // has been assigned to a client_t, but not in game yet
-	CS_SPAWNED          // client is fully in game
-};

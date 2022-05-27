@@ -103,10 +103,9 @@ static void SerializeReliableCommands( msg_t * msg ) {
 	cls.reliableSent = cls.reliableSequence;
 }
 
-void CL_ServerDisconnect_f() {
-	CL_Disconnect_f();
-	Com_Printf( "Connection was closed by server: %s\n", Cmd_Argv( 1 ) );
-	Cmd_Execute( "menu_open connfailed rejectmessage \"{}\"", Cmd_Argv( 1 ) );
+void CL_ServerDisconnect_f( Span< Span< const char > > tokens ) {
+	CL_Disconnect( NULL );
+	Com_GGPrint( "Connection was closed by server: {}", tokens[ 1 ] );
 }
 
 /*
@@ -171,31 +170,28 @@ void CL_Connect( const NetAddress & address ) {
 	cls.lastPacketReceivedTime = cls.realtime; // reset the timeout limit
 }
 
-static void CL_Connect_f() {
-	if( Cmd_Argc() < 2 ) {
-		Com_Printf( "Usage: %s <server>\n", Cmd_Argv( 0 ) );
+static void CL_Connect_f( const char * args, Span< Span< const char > > tokens ) {
+	if( tokens.n < 2 ) {
+		Com_Printf( "Usage: connect <address>\n" );
 		return;
 	}
 
 	TempAllocator temp = cls.frame_arena.temp();
 
-	const char * arg = Cmd_Argv( 1 );
-	if( StartsWith( arg, APP_URI_SCHEME ) ) {
-		arg += strlen( APP_URI_SCHEME );
-	}
+	Span< const char > arg = StripPrefix( tokens[ 1 ], APP_URI_SCHEME );
 
-	const char * at = strchr( arg, '@' );
+	const char * at = StrChr( arg, '@' );
 	if( at != NULL ) {
-		Span< const char > password = Span< const char >( arg, at - arg );
+		Span< const char > password = arg.slice( 0, at - arg.ptr );
 		Cvar_Set( "password", temp( "{}", password ) );
 		arg += password.n + 1;
 	}
 
 	u16 port;
-	const char * hostname = SplitIntoHostnameAndPort( &temp, arg, &port );
+	Span< const char > hostname = SplitIntoHostnameAndPort( arg, &port );
 
 	NetAddress address;
-	if( !DNS( hostname, &address ) ) {
+	if( !DNS( temp( "{}", hostname ), &address ) ) {
 		Com_Printf( "Bad server address\n" );
 		return;
 	}
@@ -204,14 +200,13 @@ static void CL_Connect_f() {
 	CL_Connect( address );
 }
 
-
 /*
 * CL_Rcon_f
 *
 * Send the rest of the command line over as
 * an unconnected command.
 */
-static void CL_Rcon_f() {
+static void CL_Rcon_f( const char * args, Span< Span< const char > > tokens ) {
 	if( CL_DemoPlaying() ) {
 		return;
 	}
@@ -251,9 +246,9 @@ static void CL_Rcon_f() {
 			TempAllocator temp = cls.frame_arena.temp();
 
 			u16 port;
-			const char * hostname = SplitIntoHostnameAndPort( &temp, rcon_address->value, &port );
+			Span< const char > hostname = SplitIntoHostnameAndPort( MakeSpan( rcon_address->value ), &port );
 
-			if( !DNS( hostname, &cls.rconaddress ) ) {
+			if( !DNS( temp( "{}", hostname ), &cls.rconaddress ) ) {
 				Com_Printf( "Bad rcon_address.\n" );
 				return; // we don't clear modified, so it will whine the next time too
 			}
@@ -362,7 +357,7 @@ void CL_Disconnect( const char *message ) {
 	}
 }
 
-void CL_Disconnect_f() {
+void CL_Disconnect_f( const char * args, Span< Span< const char > > tokens ) {
 	CL_Disconnect( NULL );
 }
 
@@ -417,7 +412,7 @@ void CL_ServerReconnect_f() {
 	CL_AddReliableCommand( ClientCommand_New );
 }
 
-void CL_Reconnect_f() {
+void CL_Reconnect_f( const char * args, Span< Span< const char > > tokens ) {
 	if( cls.serveraddress == NULL_ADDRESS ) {
 		Com_Printf( "Can't reconnect, never connected\n" );
 		return;
@@ -768,10 +763,6 @@ void CL_SetClientState( connstate_t state ) {
 
 static Span< const char * > TabCompleteDemo( TempAllocator * a, const char * partial ) {
 	return TabCompleteFilenameHomeDir( a, partial, "demos", APP_DEMO_EXTENSION_STR );
-}
-
-static void CL_Stop_f() {
-	CL_StopRecording( false );
 }
 
 static void CL_InitLocal() {

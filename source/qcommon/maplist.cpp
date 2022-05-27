@@ -53,7 +53,7 @@ Span< const char * > GetMapList() {
 	return maps.span().cast< const char * >();
 }
 
-bool MapExists( const char * name ) {
+bool MapExists( Span< const char > name ) {
 	for( const char * map : maps ) {
 		if( StrEqual( map, name ) ) {
 			return true;

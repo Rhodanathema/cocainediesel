@@ -253,6 +253,24 @@ bool StrCaseEqual( const char * lhs, const char * rhs ) {
 	return StrCaseEqual( MakeSpan( lhs ), MakeSpan( rhs ) );
 }
 
+static Span< const char > StrRChrSpan( Span< const char > str, char c, bool empty_if_missing ) {
+	for( size_t i = 0; i < str.n; i++ ) {
+		if( str[ str.n - i - 1 ] == c ) {
+			return str + ( str.n - i - 1 );
+		}
+	}
+
+	return empty_if_missing ? Span< const char >() : str;
+}
+
+const char * StrChr( Span< const char > str, char c ) {
+	return ( const char * ) memchr( str.ptr, c, str.n );
+}
+
+const char * StrRChr( Span< const char > str, char c ) {
+	return StrRChrSpan( str, c, true ).ptr;
+}
+
 bool StartsWith( Span< const char > str, const char * prefix ) {
 	if( str.n < strlen( prefix ) )
 		return false;
@@ -299,19 +317,9 @@ bool CaseContains( const char * haystack, const char * needle ) {
 	return false;
 }
 
-static Span< const char > MemRChr( Span< const char > str, char c, bool empty_if_missing ) {
-	for( size_t i = 0; i < str.n; i++ ) {
-		if( str[ str.n - i - 1 ] == c ) {
-			return str + ( str.n - i - 1 );
-		}
-	}
-
-	return empty_if_missing ? Span< const char >() : str;
-}
-
 Span< const char > FileExtension( Span< const char > path ) {
-	Span< const char > filename = MemRChr( path, '/', false );
-	return MemRChr( filename, '.', true );
+	Span< const char > filename = StrRChrSpan( path, '/', false );
+	return StrRChrSpan( filename, '.', true );
 }
 
 Span< const char > FileExtension( const char * path ) {
@@ -328,7 +336,7 @@ Span< const char > StripExtension( const char * path ) {
 }
 
 Span< const char > FileName( Span< const char > path ) {
-	Span< const char > name = MemRChr( path, '/', true );
+	Span< const char > name = StrRChrSpan( path, '/', true );
 	return name == "" ? path : name + 1;
 }
 
@@ -367,18 +375,6 @@ void Q_strncatz( char *dest, const char *src, size_t size ) {
 		}
 		*dest = '\0';
 	}
-}
-
-char *Q_strlwr( char *s ) {
-	char *p;
-
-	if( s ) {
-		for( p = s; *s; s++ )
-			*s = tolower( *s );
-		return p;
-	}
-
-	return NULL;
 }
 
 #define IS_TRIMMED_CHAR( s ) ( ( s ) == ' ' || ( s ) == '\t' || ( s ) == '\r' || ( s ) == '\n' )

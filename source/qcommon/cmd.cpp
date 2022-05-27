@@ -20,7 +20,7 @@ static ConsoleCommand commands[ MAX_COMMANDS ];
 static Hashtable< MAX_COMMANDS * 2 > commands_hashtable;
 
 static Span< const char > GrabLine( Span< const char > str, bool * eof ) {
-	const char * newline = ( const char * ) memchr( str.ptr, '\n', str.n );
+	const char * newline = StrChr( str, '\n' );
 	*eof = newline == NULL;
 	return newline == NULL ? str : str.slice( 0, newline - str.ptr );
 }

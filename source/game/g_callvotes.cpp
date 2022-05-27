@@ -26,8 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 static Optional< bool > clientVote[MAX_CLIENTS];
 static s64 lastclientVote[MAX_CLIENTS];
 
-Cvar *g_callvote_electtime;          // in seconds
-Cvar *g_callvote_enabled;
+static constexpr s64 callvote_duration_seconds = 20;
 
 static constexpr float callvoteElectPercent = 55.0f / 100.0f;
 static constexpr int callvoteCooldown = 5000;
@@ -39,15 +38,15 @@ struct callvotetype_t;
 struct callvotedata_t {
 	edict_t *caller;
 	const callvotetype_t *callvote;
-	int argc;
-	char *argv[MAX_STRING_TOKENS];
+	size_t argc;
+	Span< char > argv[MAX_STRING_TOKENS];
 	String< MAX_CONFIGSTRING_CHARS > string; // can be used to overwrite the displayed vote string
 	int target;
 };
 
 struct callvotetype_t {
 	const char *name;
-	u32 expectedargs;
+	size_t expectedargs;
 	bool ( *validate )( callvotedata_t *data, bool first );
 	void ( *execute )( callvotedata_t *vote );
 	const char *( *current )();
@@ -92,32 +91,17 @@ static void G_VoteMapExtraHelp( edict_t * ent, String< MAX_STRING_CHARS > * msg 
 }
 
 static bool G_VoteMapValidate( callvotedata_t *data, bool first ) {
-	char mapname[MAX_CONFIGSTRING_CHARS];
-
 	if( !first ) { // map can't become invalid while voting
 		return true;
 	}
 
-	if( strlen( "maps/" ) + strlen( data->argv[0] ) + strlen( ".bsp" ) >= MAX_CONFIGSTRING_CHARS ) {
-		G_PrintMsg( data->caller, "%sToo long map name\n", S_COLOR_RED );
-		return false;
-	}
-
-	Q_strncpyz( mapname, data->argv[0], sizeof( mapname ) );
-	COM_SanitizeFilePath( mapname );
-
-	if( StrCaseEqual( sv.mapname, mapname ) ) {
+	if( StrEqual( data->argv[ 0 ], sv.mapname ) ) {
 		G_PrintMsg( data->caller, "%sYou are already on that map\n", S_COLOR_RED );
 		return false;
 	}
 
-	if( !COM_ValidateRelativeFilename( mapname ) || strchr( mapname, '/' ) || strchr( mapname, '.' ) ) {
-		G_PrintMsg( data->caller, "%sInvalid map name\n", S_COLOR_RED );
-		return false;
-	}
-
-	if( MapExists( mapname ) ) {
-		data->string.format( "{}", mapname );
+	if( MapExists( data->argv[ 0 ] ) ) {
+		data->string.format( "{}", data->argv[ 0 ] );
 		return true;
 	}
 
@@ -127,7 +111,7 @@ static bool G_VoteMapValidate( callvotedata_t *data, bool first ) {
 }
 
 static void G_VoteMapPassed( callvotedata_t *vote ) {
-	Q_strncpyz( level.callvote_map, Q_strlwr( vote->argv[0] ), sizeof( level.callvote_map ) );
+	ggformat( level.callvote_map, sizeof( level.callvote_map ), "{}", vote->argv[ 0 ] );
 	G_EndMatch();
 }
 
@@ -195,7 +179,7 @@ static bool G_VoteSpectateValidate( callvotedata_t *vote, bool first ) {
 	int who = -1;
 
 	if( first ) {
-		edict_t *tokick = G_PlayerForText( vote->argv[0] );
+		edict_t * tokick = G_PlayerForText( vote->argv[ 0 ] );
 
 		if( tokick ) {
 			who = PLAYERNUM( tokick );
@@ -254,7 +238,7 @@ static bool G_VoteKickValidate( callvotedata_t *vote, bool first ) {
 	int who = -1;
 
 	if( first ) {
-		edict_t *tokick = G_PlayerForText( vote->argv[0] );
+		edict_t *tokick = G_PlayerForText( vote->argv[ 0 ] );
 
 		if( tokick ) {
 			who = PLAYERNUM( tokick );
@@ -426,9 +410,9 @@ static void G_CallVotes_Reset( bool vote_happened ) {
 	callvoteState.vote.caller = NULL;
 	callvoteState.vote.string.clear();
 	callvoteState.vote.target = 0;
-	for( int i = 0; i < callvoteState.vote.argc; i++ ) {
-		if( callvoteState.vote.argv[i] ) {
-			FREE( sys_allocator, callvoteState.vote.argv[i] );
+	for( size_t i = 0; i < callvoteState.vote.argc; i++ ) {
+		if( callvoteState.vote.argv[i].ptr ) {
+			FREE( sys_allocator, callvoteState.vote.argv[i].ptr );
 		}
 	}
 
@@ -477,42 +461,12 @@ static void G_CallVotes_PrintHelpToPlayer( edict_t * ent, const callvotetype_t *
 	G_PrintMsg( ent, "%s\n", msg.c_str() );
 }
 
-static const char *G_CallVotes_ArgsToString( const callvotedata_t *vote ) {
-	static char argstring[MAX_STRING_CHARS];
-
-	argstring[0] = 0;
-
-	if( vote->argc > 0 ) {
-		Q_strncatz( argstring, vote->argv[0], sizeof( argstring ) );
+static void format( FormatBuffer * fb, const callvotedata_t & vote, const FormatOpts & opts ) {
+	format( fb, vote.callvote->name );
+	for( size_t i = 0; i < vote.argc; i++ ) {
+		format( fb, " " );
+		format( fb, vote.argv[ i ], opts );
 	}
-	for( int i = 1; i < vote->argc; i++ ) {
-		Q_strncatz( argstring, " ", sizeof( argstring ) );
-		Q_strncatz( argstring, vote->argv[i], sizeof( argstring ) );
-	}
-
-	return argstring;
-}
-
-static const char *G_CallVotes_Arguments( const callvotedata_t *vote ) {
-	const char *arguments;
-	if( vote->string.length() > 0 ) {
-		arguments = vote->string.c_str();
-	} else {
-		arguments = G_CallVotes_ArgsToString( vote );
-	}
-	return arguments;
-}
-
-static const char *G_CallVotes_String( const callvotedata_t *vote ) {
-	const char *arguments;
-	static char string[MAX_CONFIGSTRING_CHARS];
-
-	arguments = G_CallVotes_Arguments( vote );
-	if( arguments[0] ) {
-		snprintf( string, sizeof( string ), "%s %s", vote->callvote->name, arguments );
-		return string;
-	}
-	return vote->callvote->name;
 }
 
 static void G_CallVotes_CheckState() {
@@ -520,8 +474,11 @@ static void G_CallVotes_CheckState() {
 		return;
 	}
 
+	TempAllocator temp = svs.frame_arena.temp();
+	const char * vote_string = temp( "{}", callvoteState.vote );
+
 	if( callvoteState.vote.callvote->validate != NULL && !callvoteState.vote.callvote->validate( &callvoteState.vote, false ) ) {
-		G_PrintMsg( NULL, "Vote %s%s%s canceled\n", S_COLOR_YELLOW, G_CallVotes_String( &callvoteState.vote ), S_COLOR_WHITE );
+		G_PrintMsg( NULL, "Vote %s%s%s canceled\n", S_COLOR_YELLOW, vote_string, S_COLOR_WHITE );
 		G_CallVotes_Reset( true );
 		return;
 	}
@@ -559,7 +516,7 @@ static void G_CallVotes_CheckState() {
 
 	int needvotes = int( voters * callvoteElectPercent ) + 1;
 	if( yeses >= needvotes ) {
-		G_PrintMsg( NULL, "Vote %s%s%s passed\n", S_COLOR_YELLOW, G_CallVotes_String( &callvoteState.vote ), S_COLOR_WHITE );
+		G_PrintMsg( NULL, "Vote %s%s%s passed\n", S_COLOR_YELLOW, vote_string, S_COLOR_WHITE );
 		if( callvoteState.vote.callvote->execute != NULL ) {
 			callvoteState.vote.callvote->execute( &callvoteState.vote );
 		}
@@ -568,7 +525,7 @@ static void G_CallVotes_CheckState() {
 	}
 
 	if( svs.realtime > callvoteState.timeout || needvotes + noes > voters ) {
-		G_PrintMsg( NULL, "Vote %s%s%s failed\n", S_COLOR_YELLOW, G_CallVotes_String( &callvoteState.vote ), S_COLOR_WHITE );
+		G_PrintMsg( NULL, "Vote %s%s%s failed\n", S_COLOR_YELLOW, vote_string, S_COLOR_WHITE );
 		G_CallVotes_Reset( true );
 		return;
 	}
@@ -628,12 +585,7 @@ void G_CallVotes_Think() {
 	}
 }
 
-static void G_CallVote( edict_t * ent, Span< Span< const char > > tokens, bool isopcall ) {
-	if( !g_callvote_enabled->integer ) {
-		G_PrintMsg( ent, "%sCallvoting is disabled on this server\n", S_COLOR_RED );
-		return;
-	}
-
+static void G_CallVote( edict_t * ent, Span< Span< const char > > tokens ) {
 	if( callvoteState.vote.callvote ) {
 		G_PrintMsg( ent, "%sA vote is already in progress\n", S_COLOR_RED );
 		return;
@@ -646,7 +598,6 @@ static void G_CallVote( edict_t * ent, Span< Span< const char > > tokens, bool i
 
 	Span< const char > votename = tokens[ 0 ];
 
-	//find the actual callvote command
 	const callvotetype_t * callvote = NULL;
 	for( const callvotetype_t & vote : votes ) {
 		if( StrCaseEqual( vote.name, votename ) ) {
@@ -655,32 +606,25 @@ static void G_CallVote( edict_t * ent, Span< Span< const char > > tokens, bool i
 		}
 	}
 
-	//unrecognized callvote type
 	if( callvote == NULL ) {
 		G_PrintMsg( ent, "%sUnrecognized vote: %s\n", S_COLOR_RED, votename );
 		G_CallVotes_PrintUsagesToPlayer( ent );
 		return;
 	}
 
-	if( !isopcall && ent->r.client->level.callvote_when &&
-		( ent->r.client->level.callvote_when + callvoteCooldown > svs.realtime ) ) {
+	if( ent->r.client->level.callvote_when && ( ent->r.client->level.callvote_when + callvoteCooldown > svs.realtime ) ) {
 		G_PrintMsg( ent, "%sYou can not call a vote right now\n", S_COLOR_RED );
 		return;
 	}
 
-	//we got a valid type. Get the parameters if any
 	if( callvote->expectedargs != tokens.n - 1 ) {
-		if( callvote->expectedargs != -1 &&
-			( callvote->expectedargs != -2 || Cmd_Argc() - 1 > 0 ) ) {
-			// wrong number of parametres
-			G_CallVotes_PrintHelpToPlayer( ent, callvote );
-			return;
-		}
+		G_CallVotes_PrintHelpToPlayer( ent, callvote );
+		return;
 	}
 
-	callvoteState.vote.argc = Cmd_Argc() - 1;
-	for( int i = 0; i < callvoteState.vote.argc; i++ ) {
-		callvoteState.vote.argv[i] = CopyString( sys_allocator, Cmd_Argv( i + 1 ) );
+	callvoteState.vote.argc = tokens.n - 1;
+	for( size_t i = 0; i < callvoteState.vote.argc; i++ ) {
+		callvoteState.vote.argv[i] = MakeSpan( ( *sys_allocator )( "{}", tokens[ i + 1 ] ) );
 	}
 
 	callvoteState.vote.callvote = callvote;
@@ -697,17 +641,19 @@ static void G_CallVote( edict_t * ent, Span< Span< const char > > tokens, bool i
 	for( int i = 0; i < server_gs.maxclients; i++ ) {
 		G_CallVotes_ResetClient( i );
 	}
-	callvoteState.timeout = svs.realtime + ( g_callvote_electtime->integer * 1000 );
+	callvoteState.timeout = svs.realtime + callvote_duration_seconds * 1000;
 
 	//caller is assumed to vote YES
 	clientVote[PLAYERNUM( ent )] = true;
 
 	ent->r.client->level.callvote_when = callvoteState.timeout;
 
-	Q_strncpyz( server_gs.gameState.callvote, G_CallVotes_String( &callvoteState.vote ), sizeof( server_gs.gameState.callvote ) );
+	TempAllocator temp = svs.frame_arena.temp();
+	const char * vote_string = temp( "{}", callvoteState.vote );
 
-	G_PrintMsg( NULL, "%s" S_COLOR_WHITE " requested to vote " S_COLOR_YELLOW "%s\n",
-				ent->r.client->netname, G_CallVotes_String( &callvoteState.vote ) );
+	Q_strncpyz( server_gs.gameState.callvote, vote_string, sizeof( server_gs.gameState.callvote ) );
+
+	G_PrintMsg( NULL, "%s requested to vote " S_COLOR_YELLOW "%s\n", ent->r.client->netname, vote_string );
 
 	G_CallVotes_Think(); // make the first think
 }
@@ -721,12 +667,9 @@ void G_CallVote_Cmd( edict_t * ent, msg_t args ) {
 		return;
 	}
 	TempAllocator temp = svs.frame_arena.temp();
-	G_CallVote( ent, TokenizeString( &temp, MSG_ReadString( &args ) ), false );
+	G_CallVote( ent, TokenizeString( &temp, MSG_ReadString( &args ) ) );
 }
 
 void G_CallVotes_Init() {
-	g_callvote_electtime = NewCvar( "g_vote_electtime", "20", CvarFlag_Archive );
-	g_callvote_enabled = NewCvar( "g_vote_allowed", "1", CvarFlag_Archive );
-
 	G_CallVotes_Reset( true );
 }

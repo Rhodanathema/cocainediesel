@@ -118,35 +118,42 @@ static void Cmd_Position_f( edict_t * ent, msg_t args ) {
 	}
 	ent->r.client->teamstate.position_lastcmd = svs.realtime;
 
-	Cmd_TokenizeString( MSG_ReadString( &args ) );
+	TempAllocator temp = svs.frame_arena.temp();
+	Span< Span< const char > > tokens = TokenizeString( &temp, MSG_ReadString( &args ) );
 
-	const char * action = Cmd_Argv( 1 );
+	Span< const char > action = tokens[ 1 ];
 
 	if( StrCaseEqual( action, "save" ) ) {
 		ent->r.client->teamstate.position_saved = true;
 		ent->r.client->teamstate.position_origin = ent->s.origin;
 		ent->r.client->teamstate.position_angles = ent->s.angles;
 		G_PrintMsg( ent, "Position saved.\n" );
-	} else if( StrCaseEqual( action, "load" ) ) {
+	}
+	else if( StrCaseEqual( action, "load" ) ) {
 		if( !ent->r.client->teamstate.position_saved ) {
 			G_PrintMsg( ent, "No position saved.\n" );
-		} else {
+		}
+		else {
 			if( G_Teleport( ent, ent->r.client->teamstate.position_origin, ent->r.client->teamstate.position_angles ) ) {
 				G_PrintMsg( ent, "Position loaded.\n" );
-			} else {
+			}
+			else {
 				G_PrintMsg( ent, "Position not available.\n" );
 			}
 		}
-	} else if( StrCaseEqual( action, "set" ) && Cmd_Argc() == 7 ) {
-		Vec3 origin = Vec3( atof( Cmd_Argv( 2 ) ), atof( Cmd_Argv( 3 ) ), atof( Cmd_Argv( 4 ) ) );
-		Vec3 angles = Vec3( atof( Cmd_Argv( 5 ) ), atof( Cmd_Argv( 6 ) ), 0.0f );
+	}
+	else if( StrCaseEqual( action, "set" ) && tokens.n == 7 ) {
+		Vec3 origin = Vec3( SpanToFloat( tokens[ 2 ], 0.0f ), SpanToFloat( tokens[ 3 ], 0.0f ), SpanToFloat( tokens[ 4 ], 0.0f ) );
+		Vec3 angles = Vec3( SpanToFloat( tokens[ 5 ], 0.0f ), SpanToFloat( tokens[ 6 ], 0.0f ), 0.0f );
 
 		if( G_Teleport( ent, origin, angles ) ) {
 			G_PrintMsg( ent, "Position not available.\n" );
-		} else {
+		}
+		else {
 			G_PrintMsg( ent, "Position set.\n" );
 		}
-	} else {
+	}
+	else {
 		G_PrintMsg( ent,
 			"Usage:\n"
 			"position save - Save current position\n"

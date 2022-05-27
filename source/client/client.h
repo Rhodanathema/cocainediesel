@@ -221,15 +221,15 @@ void CL_SetOldKeyDest( keydest_t key_dest );
 void CL_SetClientState( connstate_t state );
 void CL_ClearState();
 void CL_ReadPackets();
-void CL_Disconnect_f();
+void CL_Disconnect_f( const char * args, Span< Span< const char > > tokens );
 
 void CL_Connect( const NetAddress & address );
-void CL_Reconnect_f();
+void CL_Reconnect_f( const char * args, Span< Span< const char > > tokens );
 void CL_FinishConnect();
 void CL_ServerReconnect_f();
 void CL_Changing_f();
 void CL_Precache_f();
-void CL_ServerDisconnect_f();
+void CL_ServerDisconnect_f( Span< Span< const char > > tokens );
 
 void CL_ForceVsync( bool force );
 
@@ -266,17 +266,18 @@ void CL_WriteUcmdsToMessage( msg_t *msg );
 void CL_WriteDemoMessage( msg_t msg, size_t offset );
 void CL_DemoBaseline( const snapshot_t * snap );
 void CL_DemoCompleted();
-void CL_PlayDemo_f();
-void CL_YoloDemo_f();
+void CL_PlayDemo_f( const char * args, Span< Span< const char > > tokens );
+void CL_YoloDemo_f( const char * args, Span< Span< const char > > tokens );
 void CL_ReadDemoPackets();
 void CL_LatchedDemoJump();
-void CL_Record_f();
+void CL_Record_f( const char * args, Span< Span< const char > > tokens );
 bool CL_DemoPaused();
 bool CL_DemoSeeking();
 bool CL_YoloDemo();
 void CL_StopRecording( bool silent );
-void CL_PauseDemo_f();
-void CL_DemoJump_f();
+void CL_Stop_f( const char * args, Span< Span< const char > > tokens );
+void CL_PauseDemo_f( const char * args, Span< Span< const char > > tokens );
+void CL_DemoJump_f( const char * args, Span< Span< const char > > tokens );
 
 //
 // cl_parse.c

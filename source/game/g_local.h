@@ -292,7 +292,7 @@ void G_ClearPlayerStateEvents( gclient_t *client );
 
 // announcer events
 void G_AnnouncerSound( edict_t *targ, StringHash sound, Team team, bool queued, edict_t *ignore );
-edict_t *G_PlayerForText( const char *text );
+edict_t * G_PlayerForText( Span< const char > text );
 
 void G_SetBoundsForSpanEntity( edict_t * ent, float size );
 

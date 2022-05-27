@@ -165,7 +165,7 @@ static void CL_ParseFrame( msg_t *msg ) {
 }
 
 static void CL_UpdateConfigString( size_t idx, Span< const char > str ) {
-	if( cl_debug_serverCmd->integer && ( cls.state >= CA_ACTIVE || cls.demo.playing ) ) {
+	if( cl_debug_serverCmd->integer && ( cls.state >= CA_ACTIVE || CL_DemoPlaying() ) ) {
 		Com_GGPrint( "CL_ParseConfigstringCommand({}): \"{}\"", idx, str );
 	}
 
@@ -231,7 +231,7 @@ static const struct {
 };
 
 static void CL_ParseServerCommand( msg_t * msg ) {
-	TempAllocator = cls.frame_arena.temp();
+	TempAllocator temp = cls.frame_arena.temp();
 
 	const char * text = MSG_ReadString( msg );
 	Span< Span< const char > > tokens = TokenizeString( &temp, text );

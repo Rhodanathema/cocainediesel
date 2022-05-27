@@ -53,8 +53,12 @@ static void CloseChat() {
 void CG_InitChat() {
 	chat = { };
 
-	AddCommand( "chat", []() { OpenChat( ChatMode_All ); } );
-	AddCommand( "teamchat", []() { OpenChat( ChatMode_Team ); } );
+	AddCommand( "chat", []( const char * args, Span< Span< const char > > tokens ) {
+		OpenChat( ChatMode_All );
+	} );
+	AddCommand( "teamchat", []( const char * args, Span< Span< const char > > tokens ) {
+		OpenChat( ChatMode_Team );
+	} );
 }
 
 void CG_ShutdownChat() {
@@ -84,7 +88,7 @@ static void SendChat() {
 		TempAllocator temp = cls.frame_arena.temp();
 
 		const char * cmd = chat.mode == ChatMode_Team ? "say_team" : "say";
-		Cbuf_Add( "{} {}", cmd, chat.input );
+		Cmd_Execute( "{} {}", cmd, chat.input );
 
 		PlaySFX( "sounds/typewriter/return" );
 	}

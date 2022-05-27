@@ -78,6 +78,15 @@ struct game_command_t {
 
 #define LATENCY_COUNTS  16
 
+enum sv_client_state_t {
+	CS_FREE,            // can be reused for a new connection
+	CS_ZOMBIE,          // client has been disconnected, but don't reuse
+	                    // connection for a couple seconds
+	CS_CONNECTING,      // has send a "new" command, is awaiting for fetching configstrings
+	CS_CONNECTED,       // has been assigned to a client_t, but not in game yet
+	CS_SPAWNED          // client is fully in game
+};
+
 struct client_t {
 	sv_client_state_t state;
 
