@@ -356,8 +356,11 @@ void CreateWindow( WindowMode mode ) {
 	}
 }
 
+void CheckForLeaks();
+
 void DestroyWindow() {
 	TracyZoneScoped;
+	CheckForLeaks();
 	glfwDestroyWindow( window );
 }
 

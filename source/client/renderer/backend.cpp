@@ -547,6 +547,25 @@ void InitRenderBackend() {
 	prev_viewport_height = 0;
 }
 
+void CheckForLeaks() {
+	Com_Printf( "gl leaks:\n" );
+	GLuint max_id = 10000; // better idea would be to keep track of assigned names.
+
+	// if brute force doesn't work, you're not applying it hard enough
+	for( GLuint id = 1 ; id <= max_id ; id++ ) {
+#define CHECK( type ) if ( glIs##type( id ) ) Com_Printf( "GL: leaked " #type " handle 0x%x\n", (unsigned int) id )
+		CHECK( Texture );
+		CHECK( Buffer );
+		CHECK( Framebuffer );
+		CHECK( Renderbuffer );
+		CHECK( VertexArray );
+		CHECK( Shader );
+		CHECK( Program );
+		// CHECK( ProgramPipeline );
+#undef CHECK
+	}
+}
+
 void ShutdownRenderBackend() {
 	for( UBO ubo : ubos ) {
 		DeleteStreamingBuffer( ubo.stream );
