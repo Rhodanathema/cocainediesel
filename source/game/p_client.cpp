@@ -206,10 +206,10 @@ void G_Client_InactivityRemove( gclient_t *client ) {
 
 	// inactive for too long
 	if( client->level.last_activity && client->level.last_activity + ( g_inactivity_maxtime->number * 1000 ) < level.time ) {
-		if( client->team >= TEAM_PLAYERS && client->team < GS_MAX_TEAMS ) {
+		if( client->team != Team_None ) {
 			edict_t *ent = &game.edicts[ client - game.clients + 1 ];
 
-			G_Teams_SetTeam( ent, TEAM_SPECTATOR );
+			G_Teams_SetTeam( ent, Team_None );
 
 			G_PrintMsg( NULL, "%s has been moved to spectator after %.1f seconds of inactivity\n", client->netname, g_inactivity_maxtime->number );
 		}
@@ -255,16 +255,16 @@ void G_ClientRespawn( edict_t *self, bool ghost ) {
 	self->s.svflags &= ~SVF_NOCLIENT;
 
 	//if invalid be spectator
-	if( self->r.client->team < 0 || self->r.client->team >= GS_MAX_TEAMS ) {
-		self->r.client->team = TEAM_SPECTATOR;
+	if( self->r.client->team < 0 || self->r.client->team >= Team_Count ) {
+		self->r.client->team = Team_None;
 	}
 
 	// force ghost always to true when in spectator team
-	if( self->r.client->team == TEAM_SPECTATOR ) {
+	if( self->r.client->team == Team_None ) {
 		ghost = true;
 	}
 
-	int old_team = self->s.team;
+	Team old_team = self->s.team;
 
 	GClip_UnlinkEntity( self );
 
@@ -327,7 +327,7 @@ void G_ClientRespawn( edict_t *self, bool ghost ) {
 		self->s.svflags |= SVF_FORCETEAM;
 		self->r.solid = SOLID_YES;
 		self->movetype = MOVETYPE_PLAYER;
-		client->ps.pmove.features = PMFEAT_DEFAULT;
+		client->ps.pmove.features = PMFEAT_ALL & ~PMFEAT_GHOSTMOVE;
 	}
 
 	ClientUserinfoChanged( self, client->userinfo );
@@ -457,7 +457,7 @@ void ClientBegin( edict_t *ent ) {
 	G_Client_UpdateActivity( client ); // activity detected
 
 	if( !G_Teams_JoinAnyTeam( ent, true ) ) {
-		G_Teams_JoinTeam( ent, TEAM_SPECTATOR );
+		G_Teams_JoinTeam( ent, Team_None );
 	}
 
 	G_PrintMsg( NULL, "%s entered the game\n", client->netname );
@@ -636,7 +636,7 @@ bool ClientConnect( edict_t *ent, char *userinfo, const NetAddress & address, bo
 	memset( ent->r.client, 0, sizeof( gclient_t ) );
 	ent->r.client->ps.playerNum = PLAYERNUM( ent );
 	ent->r.client->connecting = true;
-	ent->r.client->team = TEAM_SPECTATOR;
+	ent->r.client->team = Team_None;
 	G_Client_UpdateActivity( ent->r.client ); // activity detected
 
 	ClientUserinfoChanged( ent, userinfo );
@@ -661,21 +661,22 @@ bool ClientConnect( edict_t *ent, char *userinfo, const NetAddress & address, bo
 * Called when a player drops from the server.
 * Will not be called between levels.
 */
-void ClientDisconnect( edict_t *ent, const char *reason ) {
+void ClientDisconnect( edict_t * ent, const char * reason ) {
 	if( !ent->r.client || !ent->r.inuse ) {
 		return;
 	}
 
-	if( !reason ) {
+	if( reason == NULL ) {
 		G_PrintMsg( NULL, "%s disconnected\n", ent->r.client->netname );
-	} else {
+	}
+	else {
 		G_PrintMsg( NULL, "%s disconnected (%s)\n", ent->r.client->netname, reason );
 	}
 
 	if( ent->s.type == ET_PLAYER ) {
-		CreateCorpse( ent, NULL, WorldDamage_Suicide, 0 ); //create a corpse
+		G_Killed( ent, NULL, world, -1, WorldDamage_Suicide, 0 );
 	}
-	
+
 	ent->r.inuse = false;
 	ent->s.svflags = SVF_NOCLIENT;
 
@@ -703,17 +704,16 @@ void G_PredictedEvent( int entNum, int ev, u64 parm ) {
 		case EV_SUICIDE_BOMB_EXPLODE: {
 			ent->health = 0;
 
-			edict_t stupid = { };
-			stupid.s.origin = ent->s.origin;
-			stupid.projectileInfo.maxDamage = 100;
-			stupid.projectileInfo.minDamage = 25;
-			stupid.projectileInfo.maxKnockback = 150;
-			stupid.projectileInfo.minKnockback = 75;
-			stupid.projectileInfo.radius = 150;
+			// TODO: horrible
+			ent->projectileInfo.maxDamage = 100;
+			ent->projectileInfo.minDamage = 25;
+			ent->projectileInfo.maxKnockback = 150;
+			ent->projectileInfo.minKnockback = 75;
+			ent->projectileInfo.radius = 150;
 
-			G_RadiusDamage( &stupid, ent, NULL, ent, Gadget_SuicideBomb );
+			G_RadiusDamage( ent, ent, NULL, ent, Gadget_SuicideBomb );
 
-			G_Killed( ent, ent, ent, 0, Gadget_SuicideBomb, 10000 );
+			G_Killed( ent, ent, ent, -1, Gadget_SuicideBomb, 10000 );
 			G_AddEvent( ent, ev, parm, true );
 		} break;
 
@@ -890,7 +890,6 @@ void ClientThink( edict_t *ent, UserCommand *ucmd, int timeDelta ) {
 			}
 			if( j != i ) {
 				continue; // duplicated
-
 			}
 			// player can't touch projectiles, only projectiles can touch the player
 			G_CallTouch( other, ent, NULL, 0 );

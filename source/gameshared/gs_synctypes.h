@@ -1,9 +1,17 @@
 #pragma once
 
 #include "qcommon/types.h"
+#include "qcommon/hash.h"
 
 constexpr int MAX_CLIENTS = 16;
 constexpr int MAX_EDICTS = 1024; // must change protocol to increase more
+
+enum Gametype : u8 {
+	Gametype_Bomb,
+	Gametype_Gladiator,
+
+	Gametype_Count
+};
 
 enum MatchState : u8 {
 	MatchState_Warmup,
@@ -184,26 +192,26 @@ enum BombDown {
 	BombDown_Planting,
 };
 
-enum BombProgress {
+enum BombProgress : u8 {
 	BombProgress_Nothing,
 	BombProgress_Planting,
 	BombProgress_Defusing,
+
+	BombProgress_Count
 };
 
 #define GAMESTAT_FLAG_PAUSED ( 1 << 0 )
 #define GAMESTAT_FLAG_WAITING ( 1 << 1 )
-#define GAMESTAT_FLAG_ISTEAMBASED ( 1 << 2 )
 
-enum {
-	TEAM_SPECTATOR,
-	TEAM_PLAYERS,
-	TEAM_ALPHA,
-	TEAM_BETA,
+enum Team : u8 {
+	Team_None,
 
-	GS_MAX_TEAMS,
+	Team_One,
+	Team_Two,
+	Team_Three,
+	Team_Four,
 
-	TEAM_ALLY,
-	TEAM_ENEMY,
+	Team_Count
 };
 
 struct SyncScoreboardPlayer {
@@ -222,7 +230,7 @@ struct SyncTeamState {
 };
 
 struct SyncBombGameState {
-	int attacking_team;
+	Team attacking_team;
 
 	u8 alpha_players_alive;
 	u8 alpha_players_total;
@@ -234,11 +242,15 @@ struct SyncBombGameState {
 };
 
 struct SyncGameState {
+	Gametype gametype;
+
 	u16 flags;
 	MatchState match_state;
 	s64 match_state_start_time;
 	s64 match_duration;
 	s64 clock_override;
+
+	char callvote[ 32 ];
 	u8 callvote_required_votes;
 	u8 callvote_yes_votes;
 
@@ -246,7 +258,7 @@ struct SyncGameState {
 	RoundState round_state;
 	RoundType round_type;
 
-	SyncTeamState teams[ GS_MAX_TEAMS ];
+	SyncTeamState teams[ Team_Count ];
 	SyncScoreboardPlayer players[ MAX_CLIENTS ];
 
 	StringHash map;
@@ -292,7 +304,7 @@ struct SyncEntityState {
 	// are automatically cleared each frame
 	SyncEvent events[ 2 ];
 
-	int counterNum;                 // ET_GENERIC
+	char site_letter;
 	RGBA8 silhouetteColor;
 	int radius;                     // spikes always extended, BombDown stuff, EV_BLOOD damage, ...
 
@@ -310,7 +322,7 @@ struct SyncEntityState {
 
 	StringHash sound;
 
-	int team;
+	Team team;
 };
 
 struct pmove_state_t {
@@ -329,7 +341,6 @@ struct pmove_state_t {
 	s16 no_shooting_time;
 
 	s16 knockback_time;
-	s16 tbag_time;
 	float stamina;
 	float stamina_stored;
 	StaminaState stamina_state;
@@ -380,10 +391,10 @@ struct SyncPlayerState {
 
 	WeaponType last_weapon;
 
-	int team;
-	int real_team;
+	Team team;
+	Team real_team;
 
-	u8 progress_type; // enum BombProgress
+	BombProgress progress_type;
 	u8 progress;
 
 	int pointed_player;
@@ -423,7 +434,8 @@ enum ClientCommandType : u8 {
 	ClientCommand_DemoList,
 	ClientCommand_DemoGetURL,
 	ClientCommand_Callvote,
-	ClientCommand_Vote,
+	ClientCommand_VoteYes,
+	ClientCommand_VoteNo,
 	ClientCommand_Ready,
 	ClientCommand_Unready,
 	ClientCommand_ToggleReady,

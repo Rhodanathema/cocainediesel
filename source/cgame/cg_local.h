@@ -36,13 +36,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 constexpr float FOV = 107.9f; // chosen to upset everyone equally
 
-constexpr RGB8 TEAM_COLORS[] = {
-	RGB8( 40, 204, 255 ),
-	RGB8( 255, 24, 96 ),
-	RGB8( 255, 150, 40 ),
-	RGB8( 190, 0, 240 ),
-};
-
 enum {
 	LOCALEFFECT_VSAY_TIMEOUT,
 	LOCALEFFECT_LASERBEAM,
@@ -235,7 +228,7 @@ extern cg_state_t cg;
 
 #define ISVIEWERENTITY( entNum )  ( cg.predictedPlayerState.POVnum > 0 && (int)cg.predictedPlayerState.POVnum == ( entNum ) && cg.view.type == VIEWDEF_PLAYERVIEW )
 
-#define ISREALSPECTATOR()       ( cg.frame.playerState.real_team == TEAM_SPECTATOR )
+#define ISREALSPECTATOR()       ( cg.frame.playerState.real_team == Team_None )
 
 extern centity_t cg_entities[MAX_EDICTS];
 
@@ -344,7 +337,7 @@ extern Cvar *cg_projectileAntilagOffset;
 
 extern Cvar *cg_showServerDebugPrints;
 
-void CG_Init( unsigned int playerNum, bool demoplaying, const char *demoName, unsigned snapFrameTime );
+void CG_Init( unsigned int playerNum, int max_clients, bool demoplaying, const char *demoName, unsigned snapFrameTime );
 void CG_Shutdown();
 
 #ifndef _MSC_VER
@@ -369,9 +362,12 @@ void CG_GameCommand( const char *command );
 //
 // cg_teams.c
 //
-bool CG_IsAlly( int team );
-RGB8 CG_TeamColor( int team );
-Vec4 CG_TeamColorVec4( int team );
+RGB8 CG_TeamColor( Team team );
+RGB8 AllyColor();
+RGB8 EnemyColor();
+Vec4 CG_TeamColorVec4( Team team );
+Vec4 AllyColorVec4();
+Vec4 EnemyColorVec4();
 
 //
 // cg_view.c
@@ -392,6 +388,9 @@ float CG_ViewSmoothFallKick();
 float CG_CalcViewFov();
 void CG_RenderView( unsigned extrapolationTime );
 bool CG_ChaseStep( int step );
+
+float WidescreenFov( float fov );
+float CalcHorizontalFov( const char * caller, float fov_y, float width, float height );
 
 //
 // cg_lents.c

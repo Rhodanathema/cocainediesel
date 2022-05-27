@@ -265,6 +265,8 @@ static void CG_UpdatePlayerState() {
 * a new frame snap has been received from the server
 */
 bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
+	TracyZoneScoped;
+
 	assert( frame );
 
 	if( lerpframe ) {
@@ -275,7 +277,11 @@ bool CG_NewFrameSnap( snapshot_t *frame, snapshot_t *lerpframe ) {
 
 	cg.frame = *frame;
 	client_gs.gameState = frame->gameState;
+
 	cl.map = FindMap( client_gs.gameState.map );
+	if( cl.map == NULL ) {
+		Com_Error( "You don't have the map" );
+	}
 
 	if( cg_projectileAntilagOffset->number > 1.0f || cg_projectileAntilagOffset->number < 0.0f ) {
 		Cvar_ForceSet( "cg_projectileAntilagOffset", cg_projectileAntilagOffset->default_value );
@@ -335,10 +341,6 @@ const cmodel_t *CG_CModelForEntity( int entNum ) {
 	}
 
 	return CM_ModelForBBox( cl.map->cms, cent->current.bounds.mins, cent->current.bounds.maxs );
-}
-
-static void CG_UpdateGenericEnt( centity_t *cent ) {
-	cent->interpolated.color = RGBA8( CG_TeamColor( cent->prev.team ) );
 }
 
 void CG_ExtrapolateLinearProjectile( centity_t *cent ) {
@@ -424,6 +426,8 @@ void CG_LerpGenericEnt( centity_t *cent ) {
 
 	cent->interpolated.animating = cent->prev.animating;
 	cent->interpolated.animation_time = Lerp( cent->prev.animation_time, cg.lerpfrac, cent->current.animation_time );
+
+	cent->interpolated.color = RGBA8( CG_TeamColor( cent->prev.team ) );
 }
 
 static void DrawEntityModel( centity_t * cent ) {
@@ -444,7 +448,7 @@ static void DrawEntityModel( centity_t * cent ) {
 	Vec4 color = sRGBToLinear( cent->interpolated.color );
 
 	MatrixPalettes palettes = { };
-	if( cent->interpolated.animating ) {
+	if( cent->interpolated.animating && model->num_animations > 0 ) { // TODO: this is fragile and we should do something better
 		Span< TRS > pose = SampleAnimation( &temp, model, cent->interpolated.animation_time );
 		palettes = ComputeMatrixPalettes( &temp, model, pose );
 	}
@@ -491,7 +495,7 @@ static void DrawEntityModel( centity_t * cent ) {
 
 static void CG_AddPlayerEnt( centity_t *cent ) {
 	// if set to invisible, skip
-	if( cent->current.team == TEAM_SPECTATOR ) { // TODO remove?
+	if( cent->current.team == Team_None ) { // TODO remove?
 		return;
 	}
 
@@ -615,8 +619,6 @@ static void CG_LerpSpikes( centity_t * cent ) {
 }
 
 static void CG_UpdateSpikes( centity_t * cent ) {
-	CG_UpdateGenericEnt( cent );
-
 	if( cent->current.linearMovementTimeStamp == 0 )
 		return;
 
@@ -736,7 +738,7 @@ void DrawEntities() {
 			case ET_DECAL: {
 				Vec3 normal;
 				AngleVectors( cent->current.angles, &normal, NULL, NULL );
-				DrawDecal( cent->current.origin, normal, cent->current.radius, cent->current.angles.z, cent->current.material, sRGBToLinear( cent->current.color ) );
+				DrawDecal( cent->current.origin, normal, cent->current.scale.x, 0.0f, cent->current.material, sRGBToLinear( cent->current.color ) );
 			} break;
 
 			case ET_LASERBEAM:
@@ -795,6 +797,7 @@ void CG_LerpEntities() {
 		SyncEntityState * state = &cg.frame.parsedEntities[pnum & ( MAX_PARSE_ENTITIES - 1 )];
 		int number = state->number;
 		centity_t * cent = &cg_entities[number];
+		cent->interpolated = { };
 
 		switch( cent->type ) {
 			case ET_GENERIC:
@@ -881,12 +884,10 @@ void CG_UpdateEntities() {
 			case ET_STAKE:
 			case ET_BLAST:
 			case ET_THROWING_AXE:
-				CG_UpdateGenericEnt( cent );
 				break;
 
 			case ET_PLAYER:
 			case ET_CORPSE:
-				CG_UpdateGenericEnt( cent );
 				CG_UpdatePlayerModelEnt( cent );
 				break;
 
@@ -920,7 +921,6 @@ void CG_UpdateEntities() {
 				break;
 
 			case ET_SPEAKER:
-				CG_UpdateGenericEnt( cent );
 				AddAnnouncerSpeaker( cent );
 				break;
 

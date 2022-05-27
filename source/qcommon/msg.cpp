@@ -177,6 +177,7 @@ static void DeltaFundamental( DeltaBuffer * buf, T & x, const T & baseline ) {
 	}
 }
 
+static void Delta( DeltaBuffer * buf, char & x, char baseline ) { DeltaFundamental( buf, x, baseline ); }
 static void Delta( DeltaBuffer * buf, s8 & x, s8 baseline ) { DeltaFundamental( buf, x, baseline ); }
 static void Delta( DeltaBuffer * buf, s16 & x, s16 baseline ) { DeltaFundamental( buf, x, baseline ); }
 static void Delta( DeltaBuffer * buf, s32 & x, s32 baseline ) { DeltaFundamental( buf, x, baseline ); }
@@ -223,6 +224,30 @@ static void Delta( DeltaBuffer * buf, RGBA8 & rgba, const RGBA8 & baseline ) {
 	Delta( buf, rgba.g, baseline.b );
 	Delta( buf, rgba.b, baseline.g );
 	Delta( buf, rgba.a, baseline.a );
+}
+
+template< size_t N >
+static void DeltaString( DeltaBuffer * buf, char ( &str )[ N ], const char ( &baseline )[ N ] ) {
+	if( buf->serializing ) {
+		bool diff = !StrEqual( str, baseline );
+		AddBit( buf, diff );
+		if( diff ) {
+			size_t n = strlen( str );
+			AddBytes( buf, &n, sizeof( n ) );
+			AddBytes( buf, str, n );
+		}
+	}
+	else {
+		if( GetBit( buf ) ) {
+			size_t n;
+			GetBytes( buf, &n, sizeof( n ) );
+			GetBytes( buf, str, n );
+			str[ n ] = '\0';
+		}
+		else {
+			Q_strncpyz( str, baseline, N );
+		}
+	}
 }
 
 template< typename E >
@@ -374,11 +399,9 @@ int64_t MSG_ReadIntBase128( msg_t *msg ) {
 }
 
 void MSG_ReadData( msg_t *msg, void *data, size_t length ) {
-	unsigned int i;
-
-	for( i = 0; i < length; i++ )
+	for( size_t i = 0; i < length; i++ ) {
 		( (uint8_t *)data )[i] = MSG_ReadUint8( msg );
-
+	}
 }
 
 int MSG_SkipData( msg_t *msg, size_t length ) {
@@ -458,11 +481,11 @@ static void Delta( DeltaBuffer * buf, SyncEntityState & ent, const SyncEntitySta
 	Delta( buf, ent.model2, baseline.model2 );
 	Delta( buf, ent.animating, baseline.animating );
 	Delta( buf, ent.animation_time, baseline.animation_time );
-	Delta( buf, ent.counterNum, baseline.counterNum );
+	Delta( buf, ent.site_letter, baseline.site_letter );
 	Delta( buf, ent.positioned_sound, baseline.positioned_sound );
 	DeltaEnum( buf, ent.weapon, baseline.weapon, Weapon_Count );
 	Delta( buf, ent.radius, baseline.radius );
-	Delta( buf, ent.team, baseline.team );
+	DeltaEnum( buf, ent.team, baseline.team, Team_Count );
 	Delta( buf, ent.scale, baseline.scale );
 
 	Delta( buf, ent.origin2, baseline.origin2 );
@@ -620,10 +643,10 @@ static void Delta( DeltaBuffer * buf, SyncPlayerState & player, const SyncPlayer
 	DeltaEnum( buf, player.last_weapon, baseline.last_weapon, Weapon_Count );
 	Delta( buf, player.zoom_time, baseline.zoom_time );
 
-	Delta( buf, player.team, baseline.team );
-	Delta( buf, player.real_team, baseline.real_team );
+	DeltaEnum( buf, player.team, baseline.team, Team_Count );
+	DeltaEnum( buf, player.real_team, baseline.real_team, Team_Count );
 
-	Delta( buf, player.progress_type, baseline.progress_type );
+	DeltaEnum( buf, player.progress_type, baseline.progress_type, BombProgress_Count );
 	Delta( buf, player.progress, baseline.progress );
 
 	Delta( buf, player.pointed_player, baseline.pointed_player );
@@ -675,7 +698,7 @@ static void Delta( DeltaBuffer * buf, SyncTeamState & team, const SyncTeamState 
 }
 
 static void Delta( DeltaBuffer * buf, SyncBombGameState & bomb, const SyncBombGameState & baseline ) {
-	Delta( buf, bomb.attacking_team, baseline.attacking_team );
+	DeltaEnum( buf, bomb.attacking_team, baseline.attacking_team, Team_Count );
 	Delta( buf, bomb.alpha_players_alive, baseline.alpha_players_alive );
 	Delta( buf, bomb.alpha_players_total, baseline.alpha_players_total );
 	Delta( buf, bomb.beta_players_alive, baseline.beta_players_alive );
@@ -685,11 +708,14 @@ static void Delta( DeltaBuffer * buf, SyncBombGameState & bomb, const SyncBombGa
 }
 
 static void Delta( DeltaBuffer * buf, SyncGameState & state, const SyncGameState & baseline ) {
+	DeltaEnum( buf, state.gametype, baseline.gametype, Gametype_Count );
 	Delta( buf, state.flags, baseline.flags );
 	DeltaEnum( buf, state.match_state, baseline.match_state, MatchState_Count );
 	Delta( buf, state.match_state_start_time, baseline.match_state_start_time );
 	Delta( buf, state.match_duration, baseline.match_duration );
 	Delta( buf, state.clock_override, baseline.clock_override );
+
+	DeltaString( buf, state.callvote, baseline.callvote );
 	Delta( buf, state.callvote_required_votes, baseline.callvote_required_votes );
 	Delta( buf, state.callvote_yes_votes, baseline.callvote_yes_votes );
 

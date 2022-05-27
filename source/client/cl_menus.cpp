@@ -221,7 +221,7 @@ static const char * SelectablePlayerList() {
 	DynamicArray< const char * > players( &temp );
 
 	for( int i = 0; i < client_gs.maxclients; i++ ) {
-		const char * name = PlayerName( i ); 
+		const char * name = PlayerName( i );
 		if( strlen( name ) != 0 && !ISVIEWERENTITY( i + 1 ) ) {
 			players.add( name );
 		}
@@ -286,8 +286,8 @@ static void SettingsControls() {
 
 			ImGui::Separator();
 
-			KeyBindButton( "Chat", "messagemode" );
-			KeyBindButton( "Team chat", "messagemode2" );
+			KeyBindButton( "Chat", "chat" );
+			KeyBindButton( "Team chat", "teamchat" );
 			KeyBindButton( "Spray", "spray" );
 
 			ImGui::EndTabItem();
@@ -308,7 +308,6 @@ static void SettingsControls() {
 		if( ImGui::BeginTabItem( "Mouse" ) ) {
 			CvarSliderFloat( "Sensitivity", "sensitivity", sensivity_range[ 0 ], sensivity_range[ 1 ] );
 			CvarSliderFloat( "Horizontal sensitivity", "horizontalsensscale", 0.5f, 2.0f );
-			CvarSliderFloat( "Acceleration", "m_accel", 0.0f, 1.0f );
 			CvarCheckbox( "Invert Y axis", "m_invertY" );
 
 			ImGui::EndTabItem();
@@ -329,8 +328,8 @@ static void SettingsControls() {
 		}
 
 		if( ImGui::BeginTabItem( "Misc" ) ) {
-			KeyBindButton( "Vote yes", "vote yes" );
-			KeyBindButton( "Vote no", "vote no" );
+			KeyBindButton( "Vote yes", "vote_yes" );
+			KeyBindButton( "Vote no", "vote_no" );
 			KeyBindButton( "Join team", "join" );
 			KeyBindButton( "Ready", "toggleready" );
 			KeyBindButton( "Spectate", "chase" );
@@ -880,6 +879,12 @@ static void MainMenu() {
 			ImGui::Text( "MSC - programming" );
 			ImGui::Text( "MikeJS - programming" );
 			ImGui::Text( "Obani - music & fx & programming" );
+			ImGui::Separator();
+			ImGui::Text( "jwzr - medical research" );
+			ImGui::Text( "naxeron - chief propagandist" );
+			ImGui::Text( "Rhodanathema - chief technical ceo of gameplay and forward-thinking design developments" );
+			ImGui::Text( "zmiles - american cultural advisor" );
+			ImGui::Separator();
 			ImGui::Text( "Special thanks to the Warsow team except for slk and MWAGA" );
 			ImGui::Spacing();
 
@@ -1038,7 +1043,7 @@ static bool LoadoutMenu( Vec2 displaySize ) {
 	ImGui::EndTable();
 
 	int loadoutKeys[ 2 ] = { };
-	CG_GetBoundKeycodes( "gametypemenu", loadoutKeys );
+	CG_GetBoundKeycodes( "loadoutmenu", loadoutKeys );
 
 	bool should_close = false;
 	if( ImGui::Hotkey( loadoutKeys[ 0 ] ) || ImGui::Hotkey( loadoutKeys[ 1 ] ) ) {
@@ -1053,7 +1058,7 @@ static bool LoadoutMenu( Vec2 displaySize ) {
 }
 
 static void GameMenu() {
-	bool spectating = cg.predictedPlayerState.real_team == TEAM_SPECTATOR;
+	bool spectating = cg.predictedPlayerState.real_team == Team_None;
 	bool ready = false;
 
 	if( client_gs.gameState.match_state <= MatchState_Warmup ) {
@@ -1074,32 +1079,9 @@ static void GameMenu() {
 		ImGui::Begin( "gamemenu", WindowZOrder_Menu, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus );
 		ImGuiStyle & style = ImGui::GetStyle();
 		const double half = ImGui::GetWindowWidth() / 2 - style.ItemSpacing.x - style.ItemInnerSpacing.x;
-		bool team_based = GS_TeamBasedGametype( &client_gs );
 
 		if( spectating ) {
-			if( team_based ) {
-				GameMenuButton( "Auto-join", "join", &should_close );
-
-				ImGui::Columns( 2, NULL, false );
-				ImGui::SetColumnWidth( 0, half );
-				ImGui::SetColumnWidth( 1, half );
-
-
-				PushButtonColor( CG_TeamColorVec4( TEAM_ALPHA ) * 0.5f );
-				GameMenuButton( "Join Corona", "join cocaine", &should_close, 0 );
-				ImGui::PopStyleColor( 3 );
-
-				ImGui::NextColumn();
-
-				PushButtonColor( CG_TeamColorVec4( TEAM_BETA ) * 0.5f );
-				GameMenuButton( "Join Diesel", "join diesel", &should_close, 1 );
-				ImGui::PopStyleColor( 3 );
-
-				ImGui::NextColumn();
-			}
-			else {
-				GameMenuButton( "Join Game", "join", &should_close );
-			}
+			GameMenuButton( "Join Game", "join", &should_close );
 			ImGui::Columns( 1 );
 		}
 		else {
@@ -1109,17 +1091,10 @@ static void GameMenu() {
 				}
 			}
 
-
-			if( team_based ) {
-				PushButtonColor( CG_TeamColorVec4( TEAM_ENEMY ) * 0.5f );
-				GameMenuButton( "Switch team", "join", &should_close );
-				ImGui::PopStyleColor( 3 );
-			}
-
-
 			GameMenuButton( "Spectate", "spectate", &should_close );
 
-			if( team_based ) {
+			// TODO
+			if( true ) {
 				GameMenuButton( "Change weapons", "loadoutmenu", &should_close );
 			}
 		}

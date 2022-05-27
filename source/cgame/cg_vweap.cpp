@@ -30,19 +30,27 @@ static void CG_ViewWeapon_AddAngleEffects( Vec3 * angles, cg_viewweapon_t * view
 	if( ps->using_gadget ) {
 		const GadgetDef * def = GetGadgetDef( ps->gadget );
 
-		if( ps->weapon_state == WeaponState_Cooking ) {
-			float charge = float( ps->weapon_state_time ) / float( def->cook_time );
-			float pull_back = ( 1.0f - Square( 1.0f - charge ) ) * 9.0f;
-			viewweapon->origin += FromQFAxis( cg.view.axis, AXIS_UP ) * pull_back;
-			angles->x -= Lerp( 0.0f, pull_back, 4.0f );
-		} else if( ps->weapon_state == WeaponState_SwitchingIn  ) {
+		if( ps->weapon_state == WeaponState_SwitchingIn ) {
 			float frac = 1.0f - float( ps->weapon_state_time ) / float( def->switch_in_time );
 			frac *= frac; //smoother curve
 			viewweapon->origin -= FromQFAxis( cg.view.axis, AXIS_UP ) * frac * 10.0f;
 			angles->x += Lerp( 0.0f, frac, 60.0f );
 		}
-
-	} else {
+		else if( ps->weapon_state == WeaponState_Cooking ) {
+			float charge = float( ps->weapon_state_time ) / float( def->cook_time );
+			float pull_back = ( 1.0f - Square( 1.0f - charge ) ) * 9.0f;
+			viewweapon->origin += FromQFAxis( cg.view.axis, AXIS_UP ) * pull_back;
+			angles->x -= Lerp( 0.0f, pull_back, 4.0f );
+		}
+		else if( ps->weapon_state == WeaponState_Throwing ) {
+			float frac = float( ps->weapon_state_time ) / float( def->using_time );
+			viewweapon->origin += FromQFAxis( cg.view.axis, AXIS_FORWARD ) * frac * 16.0f;
+		}
+		else if( ps->weapon_state == WeaponState_SwitchingOut ) {
+			viewweapon->origin.z -= 1000.0f; // TODO: lol
+		}
+	}
+	else {
 		const WeaponDef * def = GS_GetWeaponDef( ps->weapon );
 		if( ps->weapon == Weapon_None )
 			return;
@@ -92,7 +100,6 @@ static void CG_ViewWeapon_AddAngleEffects( Vec3 * angles, cg_viewweapon_t * view
 			float pull_back = ( 1.0f - Square( 1.0f - charge ) ) * 4.0f;
 			viewweapon->origin -= FromQFAxis( cg.view.axis, AXIS_FORWARD ) * pull_back;
 		}
-
 	}
 
 	// gun angles from bobbing
@@ -170,7 +177,7 @@ void CG_CalcViewWeapon( cg_viewweapon_t * viewweapon ) {
 	if( cg.predictedPlayerState.zoom_time == 0 ) {
 		constexpr float gun_fov = 90.0f;
 		float gun_fov_y = WidescreenFov( gun_fov );
-		float gun_fov_x = CalcHorizontalFov( gun_fov_y, frame_static.viewport_width, frame_static.viewport_height );
+		float gun_fov_x = CalcHorizontalFov( "CalcViewWeapon", gun_fov_y, frame_static.viewport_width, frame_static.viewport_height );
 
 		float fracWeapFOV = tanf( Radians( gun_fov_x ) * 0.5f ) / cg.view.fracDistFOV;
 

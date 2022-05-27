@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "server/server.h"
 #include "qcommon/fs.h"
 #include "qcommon/maplist.h"
+#include "qcommon/time.h"
 
 /*
 * SV_Map_f
@@ -93,7 +94,7 @@ void SV_Status_f() {
 }
 
 static void SV_Heartbeat_f() {
-	svc.nextHeartbeat = Sys_Milliseconds();
+	svc.nextHeartbeat = Now();
 }
 
 /*

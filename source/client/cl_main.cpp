@@ -344,6 +344,9 @@ void CL_Disconnect( const char *message ) {
 		CL_Disconnect_SendCommand(); // send a disconnect message to the server
 	}
 
+	FREE( sys_allocator, cls.server_name );
+	cls.server_name = NULL;
+
 	FREE( sys_allocator, cls.download_url );
 	cls.download_url = NULL;
 
@@ -664,7 +667,9 @@ static bool AddDownloadedMap( const char * filename, Span< const u8 > compressed
 		return false;
 	}
 
-	if( !AddMap( data, filename + strlen( "base/" ) ) ) {
+	TempAllocator temp = cls.frame_arena.temp();
+	Span< const char > clean_filename = StripPrefix( StripExtension( filename ), "base/" );
+	if( !AddMap( data, temp( "{}", clean_filename ) ) ) {
 		Com_Printf( "Downloaded map is corrupt.\n" );
 		return false;
 	}
@@ -815,7 +820,6 @@ static void CL_InitLocal() {
 
 	NewCvar( "sensitivity", "3", CvarFlag_Archive );
 	NewCvar( "horizontalsensscale", "1", CvarFlag_Archive );
-	NewCvar( "m_accel", "0", CvarFlag_Archive );
 	NewCvar( "m_invertY", "0", CvarFlag_Archive );
 
 	AddCommand( "connect", CL_Connect_f );

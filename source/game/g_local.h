@@ -31,7 +31,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //==================================================================
 
 // FIXME: Medar: Remove the spectator test and just make sure they always have health
-#define G_IsDead( ent )       ( ( !( ent )->r.client || ( ent )->s.team != TEAM_SPECTATOR ) && HEALTH_TO_INT( ( ent )->health ) <= 0 )
+#define G_IsDead( ent )       ( ( !( ent )->r.client || ( ent )->s.team != Team_None ) && HEALTH_TO_INT( ( ent )->health ) <= 0 )
 
 #define FRAMETIME ( (float)game.frametime * 0.001f )
 
@@ -67,8 +67,8 @@ enum movetype_t {
 struct timeout_t {
 	int64_t time;
 	int64_t endtime;
-	int caller;
-	int used[MAX_CLIENTS];
+	Team caller;
+	int used[Team_Count];
 };
 
 //
@@ -87,8 +87,7 @@ struct level_locals_t {
 
 	bool exitNow;
 
-	// gametype definition and execution
-	Gametype gametype;
+	GametypeSpec gametype;
 
 	bool ready[MAX_CLIENTS];
 
@@ -105,7 +104,6 @@ struct spawn_temp_t {
 	int lip;
 	int distance;
 	int height;
-	float radius;
 	StringHash noise;
 	StringHash noise_start;
 	StringHash noise_stop;
@@ -113,6 +111,7 @@ struct spawn_temp_t {
 	int gameteam;
 	int size;
 	float spawn_probability;
+	float power;
 };
 
 struct score_stats_t {
@@ -168,10 +167,12 @@ extern Cvar *g_autorecord_maxdemos;
 extern Cvar *g_allow_spectator_voting;
 
 void G_Teams_Join_Cmd( edict_t * ent, msg_t args );
-bool G_Teams_JoinTeam( edict_t * ent, int team );
+bool G_Teams_JoinTeam( edict_t * ent, Team team );
 void G_Teams_UpdateMembersList();
 bool G_Teams_JoinAnyTeam( edict_t * ent, bool silent );
-void G_Teams_SetTeam( edict_t * ent, int team );
+void G_Teams_SetTeam( edict_t * ent, Team team );
+
+u8 PlayersAliveOnTeam( Team team );
 
 void G_Match_Ready( edict_t * ent );
 void G_Match_NotReady( edict_t * ent );
@@ -228,6 +229,14 @@ void G_AddCommand( ClientCommandType command, gamecommandfunc_t cmdfunc );
 // g_utils.c
 //
 
+struct EntityID {
+	u64 id;
+};
+
+EntityID NewEntity();
+void ResetEntityIDSequence();
+edict_t * GetEntity( EntityID id );
+
 bool KillBox( edict_t * ent, DamageType damage_type, Vec3 knockback );
 float LookAtKillerYAW( edict_t *self, edict_t *inflictor, edict_t *attacker );
 edict_t * G_Find( edict_t * cursor, StringHash edict_t::* field, StringHash value );
@@ -282,7 +291,7 @@ void G_AddPlayerStateEvent( gclient_t *client, int event, u64 parm );
 void G_ClearPlayerStateEvents( gclient_t *client );
 
 // announcer events
-void G_AnnouncerSound( edict_t *targ, StringHash sound, int team, bool queued, edict_t *ignore );
+void G_AnnouncerSound( edict_t *targ, StringHash sound, Team team, bool queued, edict_t *ignore );
 edict_t *G_PlayerForText( const char *text );
 
 void G_SetBoundsForSpanEntity( edict_t * ent, float size );
@@ -296,7 +305,8 @@ void G_CallVotes_ResetClient( int n );
 void G_CallVotes_Think();
 bool G_Callvotes_HasVoted( edict_t * ent );
 void G_CallVote_Cmd( edict_t * ent, msg_t args );
-void G_CallVotes_CmdVote( edict_t * ent, msg_t args );
+void G_CallVotes_VoteYes( edict_t * ent, msg_t args );
+void G_CallVotes_VoteNo( edict_t * ent, msg_t args );
 void G_OperatorVote_Cmd( edict_t * ent, msg_t args );
 
 //
@@ -486,13 +496,6 @@ void G_ResetLevel();
 void G_InitLevel( const char *mapname, int64_t levelTime );
 void G_LoadMap( const char * name );
 
-struct EntityID {
-	u64 id;
-};
-
-EntityID NewEntity();
-void ResetEntityIDSequence();
-
 //============================================================================
 
 struct projectileinfo_t {
@@ -625,7 +628,7 @@ struct gclient_t {
 
 	bool connecting;
 
-	int team;
+	Team team;
 
 	UserCommand ucmd;
 	int timeDelta;              // time offset to adjust for shots collision (antilag)
@@ -776,7 +779,7 @@ struct game_locals_t {
 
 extern game_locals_t game;
 
-#define world game.edicts
+constexpr edict_t * world = &game.edicts[ 0 ];
 
 static inline int ENTNUM( const edict_t *x ) { return x - game.edicts; }
 static inline int ENTNUM( const gclient_t *x ) { return x - game.clients + 1; }

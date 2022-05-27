@@ -50,12 +50,12 @@ static void CG_SC_ChatPrint() {
 	}
 
 	const char * name = PlayerName( who - 1 );
-	int team = cg_entities[ who ].current.team;
-	RGB8 team_color = team == TEAM_SPECTATOR ? RGB8( 128, 128, 128 ) : CG_TeamColor( team );
+	Team team = cg_entities[ who ].current.team;
+	RGB8 team_color = team == Team_None ? RGB8( 128, 128, 128 ) : CG_TeamColor( team );
 
 	const char * prefix = "";
 	if( teamonly ) {
-		prefix = team == TEAM_SPECTATOR ? "[SPEC] " : "[TEAM] ";
+		prefix = team == Team_None ? "[SPEC] " : "[TEAM] ";
 	}
 
 	ImGuiColorToken color( team_color );
@@ -82,8 +82,8 @@ static void CG_Cmd_DemoGet_f() {
 		return;
 	}
 
-	TempAllocator temp = cls.frame_arena.temp();
-	Cmd_Execute( "demogeturl {}", Cmd_Argv( 1 ) );
+	msg_t * args = CL_AddReliableCommand( ClientCommand_DemoGetURL );
+	MSG_WriteString( args, Cmd_Argv( 1 ) );
 
 	demo_requested = true;
 }
@@ -161,7 +161,9 @@ static void CG_SC_ChangeLoadout( const char * args, Span< Span< const char > > t
 }
 
 static void CG_SC_SaveLoadout( const char * args, Span< Span< const char > > tokens ) {
-	Cvar_Set( "cg_loadout", args );
+	if( !cgs.demoPlaying ) {
+		Cvar_Set( "cg_loadout", args );
+	}
 }
 
 struct ServerCommand {
@@ -336,7 +338,8 @@ static const ClientToServerCommand game_commands_yes_args[] = {
 	{ "say", ClientCommand_Say },
 	{ "say_team", ClientCommand_SayTeam },
 	{ "callvote", ClientCommand_Callvote },
-	{ "vote", ClientCommand_Vote },
+	{ "vote_yes", ClientCommand_VoteYes },
+	{ "vote_no", ClientCommand_VoteNo },
 	{ "join", ClientCommand_Join },
 	{ "vsay", ClientCommand_Vsay },
 	{ "setloadout", ClientCommand_SetLoadout },

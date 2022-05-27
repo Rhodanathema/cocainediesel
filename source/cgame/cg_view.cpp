@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cgame/cg_local.h"
 #include "client/renderer/renderer.h"
 #include "client/renderer/skybox.h"
+#include "qcommon/time.h"
 
 ChasecamState chaseCam;
 
@@ -80,58 +81,14 @@ bool CG_ChaseStep( int step ) {
 	return false;
 }
 
-/*
-* CG_FlashGameWindow
-*
-* Flashes game window in case of important events (match state changes, etc) for user to notice
-*/
-static void CG_FlashGameWindow() {
-	static int oldState = -1;
-	bool flash = false;
-	static u8 oldAlphaScore, oldBetaScore;
-	static bool scoresSet = false;
-
-	// notify player of important match states
-	int newState = client_gs.gameState.match_state;
-	if( oldState != newState ) {
-		switch( newState ) {
-			case MatchState_Countdown:
-			case MatchState_Playing:
-			case MatchState_PostMatch:
-				flash = true;
-				break;
-			default:
-				break;
-		}
-
-		oldState = newState;
-	}
-
-	// notify player of teams scoring in team-based gametypes
-	if( !scoresSet ||
-		( oldAlphaScore != client_gs.gameState.teams[ TEAM_ALPHA ].score || oldBetaScore != client_gs.gameState.teams[ TEAM_BETA ].score ) ) {
-		oldAlphaScore = client_gs.gameState.teams[ TEAM_ALPHA ].score;
-		oldBetaScore = client_gs.gameState.teams[ TEAM_BETA ].score;
-
-		flash = scoresSet && GS_TeamBasedGametype( &client_gs );
-		scoresSet = true;
-	}
-
-	if( flash ) {
-		FlashWindow();
-	}
-}
-
 float CG_CalcViewFov() {
-	float hardcoded_fov = 107.9f;
-
 	WeaponType weapon = cg.predictedPlayerState.weapon;
 	if( weapon == Weapon_None )
-		return hardcoded_fov;
+		return FOV;
 
 	float zoom_fov = GS_GetWeaponDef( weapon )->zoom_fov;
 	float frac = float( cg.predictedPlayerState.zoom_time ) / float( ZOOMTIME );
-	return Lerp( hardcoded_fov, frac, float( zoom_fov ) );
+	return Lerp( FOV, frac, float( zoom_fov ) );
 }
 
 static void CG_CalcViewBob() {
@@ -217,6 +174,10 @@ static void CG_InterpolatePlayerState( SyncPlayerState *playerState ) {
 
 	playerState->zoom_time = Lerp( ops->zoom_time, cg.lerpfrac, ps->zoom_time );
 	playerState->flashed = Lerp( ops->flashed, cg.lerpfrac, ps->flashed );
+
+	if( ops->progress_type == ps->progress_type ) {
+		playerState->progress = Lerp( ops->progress, cg.lerpfrac, ps->progress );
+	}
 
 	// TODO: this should probably go through UpdateWeapons
 	if( ps->weapon_state_time >= ops->weapon_state_time ) {
@@ -331,6 +292,35 @@ static void CG_UpdateChaseCam() {
 	}
 }
 
+float WidescreenFov( float fov ) {
+	return atanf( tanf( fov / 360.0f * PI ) * 0.75f ) * ( 360.0f / PI );
+}
+
+float CalcHorizontalFov( const char * caller, float fov_y, float width, float height ) {
+	if( fov_y < 1 || fov_y > 179 ) {
+		Com_Printf( S_COLOR_YELLOW "Bad vertical fov: caller = %s, fov_y = %f, width = %f, height = %f\n", caller, fov_y, width, height );
+		return 100.0f;
+	}
+
+	float x = width * tanf( fov_y / 360.0f * PI );
+	return atanf( x / height ) * 360.0f / PI;
+}
+
+static void ScreenShake( cg_viewdef_t * view ) {
+	if( !client_gs.gameState.bomb.exploding )
+		return;
+
+	s64 dt = cl.serverTime - client_gs.gameState.bomb.exploded_at;
+
+	// TODO: we need this because the game drops you into busted noclip when you have noone to spec
+	if( dt >= 3000 )
+		return;
+
+	float shake_amount = Unlerp01( s64( 0 ), dt, s64( 1000 ) );
+
+	view->angles.z = shake_amount * 20.0f * Sin( cls.monotonicTime, Milliseconds( 250 ) );
+}
+
 static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 	memset( view, 0, sizeof( cg_viewdef_t ) );
 
@@ -389,6 +379,8 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 			CG_Recoil( cg.predictedPlayerState.weapon );
 
 			CG_ViewSmoothPredictedSteps( &view->origin ); // smooth out stair climbing
+
+			ScreenShake( view );
 		} else {
 			cg.predictingTimeStamp = cl.serverTime;
 			cg.predictFrom = 0;
@@ -411,7 +403,7 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 		view->fov_y = WidescreenFov( CG_DemoCam_GetOrientation( &view->origin, &view->angles, &view->velocity ) );
 	}
 
-	if( cg.predictedPlayerState.health <= 0 && cg.predictedPlayerState.team != TEAM_SPECTATOR ) {
+	if( cg.predictedPlayerState.health <= 0 && cg.predictedPlayerState.team != Team_None ) {
 		AddDamageEffect();
 	}
 	else {
@@ -421,7 +413,7 @@ static void CG_SetupViewDef( cg_viewdef_t *view, int type ) {
 		}
 	}
 
-	view->fov_x = CalcHorizontalFov( view->fov_y, frame_static.viewport_width, frame_static.viewport_height );
+	view->fov_x = CalcHorizontalFov( "SetupViewDef", view->fov_y, frame_static.viewport_width, frame_static.viewport_height );
 
 	Matrix3_FromAngles( view->angles, view->axis );
 
@@ -478,26 +470,6 @@ static void DrawWorld() {
 			DrawModelPrimitive( model, &model->primitives[ i ], pipeline );
 		}
 	}
-
-	{
-		bool msaa = frame_static.msaa_samples >= 1;
-
-		PipelineState pipeline;
-		pipeline.pass = frame_static.add_world_outlines_pass;
-		pipeline.shader = msaa ? &shaders.postprocess_world_gbuffer_msaa : &shaders.postprocess_world_gbuffer;
-		pipeline.depth_func = DepthFunc_Disabled;
-		pipeline.blend_func = BlendFunc_Blend;
-		pipeline.write_depth = false;
-
-		constexpr RGBA8 gray = RGBA8( 30, 30, 30, 255 );
-
-		const Framebuffer & fb = msaa ? frame_static.msaa_fb : frame_static.postprocess_fb;
-		pipeline.set_texture( "u_DepthTexture", &fb.depth_texture );
-		pipeline.set_uniform( "u_Fog", frame_static.fog_uniforms );
-		pipeline.set_uniform( "u_View", frame_static.view_uniforms );
-		pipeline.set_uniform( "u_Outline", UploadUniformBlock( sRGBToLinear( gray ) ) );
-		DrawFullscreenMesh( pipeline );
-	}
 }
 
 static void DrawSilhouettes() {
@@ -516,6 +488,27 @@ static void DrawSilhouettes() {
 		pipeline.set_uniform( "u_View", frame_static.ortho_view_uniforms );
 		DrawFullscreenMesh( pipeline );
 	}
+}
+
+static void DrawOutlines() {
+	bool msaa = frame_static.msaa_samples >= 1;
+
+	PipelineState pipeline;
+	pipeline.pass = frame_static.add_outlines_pass;
+	pipeline.shader = msaa ? &shaders.postprocess_world_gbuffer_msaa : &shaders.postprocess_world_gbuffer;
+	pipeline.depth_func = DepthFunc_Disabled;
+	pipeline.blend_func = BlendFunc_Blend;
+	pipeline.write_depth = false;
+
+	constexpr RGBA8 gray = RGBA8( 30, 30, 30, 255 );
+
+	const Framebuffer & fb = msaa ? frame_static.msaa_fb_masked : frame_static.postprocess_fb_masked;
+	pipeline.set_texture( "u_DepthTexture", &fb.depth_texture );
+	pipeline.set_texture( "u_MaskTexture", &fb.mask_texture );
+	pipeline.set_uniform( "u_Fog", frame_static.fog_uniforms );
+	pipeline.set_uniform( "u_View", frame_static.view_uniforms );
+	pipeline.set_uniform( "u_Outline", UploadUniformBlock( sRGBToLinear( gray ) ) );
+	DrawFullscreenMesh( pipeline );
 }
 
 void CG_RenderView( unsigned extrapolationTime ) {
@@ -587,8 +580,6 @@ void CG_RenderView( unsigned extrapolationTime ) {
 		cgs.textSizeBig = SYSTEM_FONT_BIG_SIZE * scale;
 	}
 
-	CG_FlashGameWindow(); // notify player of important game events
-
 	AllocateDecalBuffers();
 
 	CG_UpdateChaseCam();
@@ -613,6 +604,7 @@ void CG_RenderView( unsigned extrapolationTime ) {
 	DoVisualEffect( "vfx/rain", cg.view.origin );
 
 	DrawWorld();
+	DrawOutlines();
 	DrawSilhouettes();
 	DrawEntities();
 	CG_AddViewWeapon( &cg.weapon );

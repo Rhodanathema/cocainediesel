@@ -38,6 +38,22 @@ BAR GRAPHS
 ===============================================================================
 */
 
+typedef struct {
+	float value;
+	Vec4 color;
+} graphsamp_t;
+
+static int current;
+static graphsamp_t values[1024];
+
+static void SCR_DebugGraph( float value, float r, float g, float b ) {
+	values[current].value = value;
+	values[current].color = Vec4( r, g, b, 1.0f );
+
+	current++;
+	current &= 1023;
+}
+
 /*
 * CL_AddNetgraph
 *
@@ -63,23 +79,6 @@ void CL_AddNetgraph() {
 		ping = 30;
 	}
 	SCR_DebugGraph( ping, 1.0f, 0.75f, 0.06f );
-}
-
-
-typedef struct {
-	float value;
-	Vec4 color;
-} graphsamp_t;
-
-static int current;
-static graphsamp_t values[1024];
-
-void SCR_DebugGraph( float value, float r, float g, float b ) {
-	values[current].value = value;
-	values[current].color = Vec4( r, g, b, 1.0f );
-
-	current++;
-	current &= 1023;
 }
 
 static void SCR_DrawFillRect( int x, int y, int w, int h, Vec4 color ) {
@@ -180,7 +179,7 @@ static void SubmitPostprocessPass() {
 
 	static float chasing_amount = 0.0f;
 	constexpr float chasing_speed = 4.0f;
-	bool chasing = cls.cgameActive && !CL_DemoPlaying() && cg.predictedPlayerState.team != TEAM_SPECTATOR && cg.predictedPlayerState.POVnum != cgs.playerNum + 1;
+	bool chasing = cls.cgameActive && !CL_DemoPlaying() && cg.predictedPlayerState.team != Team_None && cg.predictedPlayerState.POVnum != cgs.playerNum + 1;
 	if( chasing ) {
 		chasing_amount += cls.frametime * 0.001f * chasing_speed;
 	} else {

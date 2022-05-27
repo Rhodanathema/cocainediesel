@@ -75,11 +75,6 @@ void AnglesToAxis( Vec3 angles, mat3_t axis );
 void OrthonormalBasis( Vec3 v, Vec3 * tangent, Vec3 * bitangent );
 void BuildBoxPoints( Vec3 p[8], Vec3 org, Vec3 mins, Vec3 maxs );
 
-float WidescreenFov( float fov );
-float CalcHorizontalFov( float fov_y, float width, float height );
-
-#define Q_rint( x ) ( ( x ) < 0 ? ( (int)( ( x ) - 0.5f ) ) : ( (int)( ( x ) + 0.5f ) ) )
-
 bool PlaneFromPoints( Vec3 verts[3], Plane *plane );
 
 bool ComparePlanes( Vec3 p1normal, float p1dist, Vec3 p2normal, float p2dist );
@@ -94,6 +89,7 @@ void Matrix3_Multiply( const mat3_t m1, const mat3_t m2, mat3_t out );
 void Matrix3_TransformVector( const mat3_t m, Vec3 v, Vec3 * out );
 void Matrix3_FromAngles( Vec3 angles, mat3_t m );
 
+int PositiveMod( int x, int y );
 float PositiveMod( float x, float y );
 double PositiveMod( double x, double y );
 

@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "server/server.h"
 #include "qcommon/version.h"
 #include "qcommon/csprng.h"
+#include "qcommon/time.h"
 
 static bool sv_initialized = false;
 
@@ -213,7 +214,7 @@ static void SV_CheckLatchedUserinfoChanges() {
 
 	client_t *cl;
 	int i;
-	int64_t time = Sys_Milliseconds();
+	Time time = Now();
 
 	for( i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++ ) {
 		if( cl->state == CS_FREE || cl->state == CS_ZOMBIE ) {
@@ -309,17 +310,6 @@ static bool SV_RunGameFrame( int msec ) {
 	return false;
 }
 
-static void SV_CheckDefaultMap() {
-	if( svc.autostarted ) {
-		return;
-	}
-
-	svc.autostarted = true;
-	if( is_dedicated_server ) {
-		printf( "WTF\n" );
-	}
-}
-
 void SV_Frame( unsigned realmsec, unsigned gamemsec ) {
 	TracyZoneScoped;
 
@@ -332,7 +322,6 @@ void SV_Frame( unsigned realmsec, unsigned gamemsec ) {
 
 	// if server is not active, do nothing
 	if( !svs.initialized ) {
-		SV_CheckDefaultMap();
 		return;
 	}
 
@@ -391,7 +380,6 @@ void SV_UserinfoChanged( client_t *client ) {
 		return;
 	}
 	Q_strncpyz( client->name, val, sizeof( client->name ) );
-
 }
 
 void SV_Init() {

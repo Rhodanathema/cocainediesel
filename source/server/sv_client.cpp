@@ -20,12 +20,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "server/server.h"
 #include "qcommon/version.h"
+#include "qcommon/time.h"
 
 //============================================================================
 //
 //		CLIENT
 //
 //============================================================================
+
+constexpr Time USERINFO_UPDATE_RATE_LIMIT = Seconds( 2 );
 
 void SV_ClientResetCommandBuffers( client_t *client ) {
 	// reset the reliable commands buffer
@@ -76,7 +79,7 @@ bool SV_ClientConnect( const NetAddress & address, client_t * client, char * use
 	}
 
 	// parse some info from the info strings
-	client->userinfoLatchTimeout = Sys_Milliseconds() + USERINFO_UPDATE_COOLDOWN_MSEC;
+	client->userinfoLatchTimeout = Now() + USERINFO_UPDATE_RATE_LIMIT;
 	Q_strncpyz( client->userinfo, userinfo, sizeof( client->userinfo ) );
 	SV_UserinfoChanged( client );
 
@@ -162,26 +165,21 @@ static void SV_New_f( client_t *client, msg_t args ) {
 	//
 	SV_InitClientMessage( client, &tmpMessage, NULL, 0 );
 
+	// set up the entity for the client
+	int playernum = client - svs.clients;
+	edict_t * ent = EDICT_NUM( playernum + 1 );
+	ent->s.number = playernum + 1;
+	client->edict = ent;
+
 	// send the serverdata
 	MSG_WriteUint8( &tmpMessage, svc_serverdata );
 	MSG_WriteUint32( &tmpMessage, APP_PROTOCOL_VERSION );
 	MSG_WriteInt32( &tmpMessage, svs.spawncount );
 	MSG_WriteInt16( &tmpMessage, (unsigned short)svc.snapFrameTime );
-
-	int playernum = client - svs.clients;
+	MSG_WriteUint8( &tmpMessage, sv_maxclients->integer );
 	MSG_WriteInt16( &tmpMessage, playernum );
-
-	//
-	// game server
-	//
-	if( sv.state == ss_game ) {
-		// set up the entity for the client
-		edict_t * ent = EDICT_NUM( playernum + 1 );
-		ent->s.number = playernum + 1;
-		client->edict = ent;
-
-		MSG_WriteString( &tmpMessage, sv_downloadurl->value );
-	}
+	MSG_WriteString( &tmpMessage, sv_hostname->value );
+	MSG_WriteString( &tmpMessage, sv_downloadurl->value );
 
 	SV_ClientResetCommandBuffers( client );
 
@@ -306,14 +304,14 @@ static void SV_UserinfoCommand_f( client_t *client, msg_t args ) {
 		return;
 	}
 
-	s64 time = Sys_Milliseconds();
+	Time time = Now();
 	if( client->userinfoLatchTimeout > time ) {
 		Q_strncpyz( client->userinfoLatched, info, sizeof( client->userinfo ) );
 	} else {
 		Q_strncpyz( client->userinfo, info, sizeof( client->userinfo ) );
 
 		client->userinfoLatched[0] = '\0';
-		client->userinfoLatchTimeout = time + USERINFO_UPDATE_COOLDOWN_MSEC;
+		client->userinfoLatchTimeout = time + USERINFO_UPDATE_RATE_LIMIT;
 
 		SV_UserinfoChanged( client );
 	}

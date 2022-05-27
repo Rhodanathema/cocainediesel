@@ -20,6 +20,23 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "game/g_local.h"
 #include "qcommon/cmodel.h"
+#include "qcommon/hashtable.h"
+
+static u64 entity_id_seq;
+static Hashtable< MAX_EDICTS * 2 > entity_id_hashtable;
+
+EntityID NewEntity() {
+	return { entity_id_seq++ };
+}
+
+void ResetEntityIDSequence() {
+	entity_id_seq = 1;
+}
+
+edict_t * GetEntity( EntityID id ) {
+	u64 idx;
+	return entity_id_hashtable.get( id.id, &idx ) ? &game.edicts[ idx ] : NULL;
+}
 
 edict_t * G_Find( edict_t * cursor, StringHash edict_t::* field, StringHash value ) {
 	if( cursor == NULL ) {
@@ -179,10 +196,13 @@ void G_SetMovedir( Vec3 * angles, Vec3 * movedir ) {
 }
 
 void G_FreeEdict( edict_t *ed ) {
-	if( ed == NULL )
+	if( ed == NULL || !ed->r.inuse )
 		return;
 
 	GClip_UnlinkEntity( ed );
+
+	bool ok = entity_id_hashtable.remove( ed->id.id );
+	assert( ok );
 
 	memset( ed, 0, sizeof( *ed ) );
 	ed->s.number = ENTNUM( ed );
@@ -194,10 +214,18 @@ void G_FreeEdict( edict_t *ed ) {
 }
 
 void G_InitEdict( edict_t *e ) {
+	if( e->r.inuse ) {
+		bool ok = entity_id_hashtable.remove( e->id.id );
+		assert( ok );
+	}
+
 	memset( e, 0, sizeof( *e ) );
 	e->s.number = ENTNUM( e );
 	e->id = NewEntity();
 	e->r.inuse = true;
+
+	bool ok = entity_id_hashtable.add( e->id.id, e->s.number );
+	assert( ok );
 
 	e->s.scale = Vec3( 1.0f );
 
@@ -273,7 +301,6 @@ void G_AddEvent( edict_t *ent, int event, u64 parm, bool highPriority ) {
 		return; // no low priority event to overwrite
 	} else {
 		ent->numEvents++; // numEvents is only used to vary the overwritten event
-
 	}
 	ent->s.events[eventNum].type = event;
 	ent->s.events[eventNum].parm = parm;
@@ -420,7 +447,7 @@ void G_ChatMsg( edict_t *ent, edict_t *who, bool teamonly, const char *format, .
 				;   // wtf?
 			} else if( teamonly ) {
 				Com_Printf( "[%s] %s %s\n",
-						  who->r.client->ps.team == TEAM_SPECTATOR ? "SPEC" : "TEAM", who->r.client->netname, msg );
+						  who->r.client->ps.team == Team_None ? "SPEC" : "TEAM", who->r.client->netname, msg );
 			} else {
 				Com_Printf( "%s: %s\n", who->r.client->netname, msg );
 			}
@@ -613,7 +640,7 @@ bool KillBox( edict_t *ent, DamageType damage_type, Vec3 knockback ) {
 		}
 
 		// nail it
-		G_Damage( &game.edicts[tr.ent], ent, ent, knockback, Vec3( 0.0f ), ent->s.origin, 100000, Length( knockback ), 0, damage_type );
+		G_Damage( &game.edicts[tr.ent], ent, ent, knockback, Vec3( 0.0f ), ent->s.origin, 200, Length( knockback ), 0, damage_type );
 		telefragged = true;
 
 		// if we didn't kill it, fail
@@ -816,9 +843,9 @@ edict_t *G_PlayerForText( const char *text ) {
 	return NULL;
 }
 
-void G_AnnouncerSound( edict_t *targ, StringHash sound, int team, bool queued, edict_t *ignore ) {
+void G_AnnouncerSound( edict_t *targ, StringHash sound, Team team, bool queued, edict_t *ignore ) {
 	int psev = queued ? PSEV_ANNOUNCER_QUEUED : PSEV_ANNOUNCER;
-	int playerTeam;
+	Team playerTeam;
 
 	if( targ ) { // only for a given player
 		if( !targ->r.client || PF_GetClientState( PLAYERNUM( targ ) ) < CS_SPAWNED ) {
@@ -843,11 +870,11 @@ void G_AnnouncerSound( edict_t *targ, StringHash sound, int team, bool queued, e
 			}
 
 			// team filter
-			if( team >= TEAM_SPECTATOR && team < GS_MAX_TEAMS ) {
+			if( team >= Team_None && team < Team_Count ) {
 				playerTeam = ent->s.team;
 
 				// if in chasecam, assume the player is in the chased player team
-				if( playerTeam == TEAM_SPECTATOR && ent->r.client->resp.chase.active
+				if( playerTeam == Team_None && ent->r.client->resp.chase.active
 					&& ent->r.client->resp.chase.target > 0 ) {
 					playerTeam = game.edicts[ent->r.client->resp.chase.target].s.team;
 				}

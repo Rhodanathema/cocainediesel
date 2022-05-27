@@ -134,7 +134,7 @@ void SV_Demo_Start_f( const char * args, Span< Span< const char > > tokens ) {
 
 	Com_Printf( "Recording server demo: %s\n", filename );
 
-	bool recording = StartRecordingDemo( &temp, &record_demo_context, filename, svs.spawncount, svc.snapFrameTime, sv.configstrings[ 0 ], sv.baselines );
+	bool recording = StartRecordingDemo( &temp, &record_demo_context, filename, svs.spawncount, svc.snapFrameTime, server_gs.maxclients, sv.configstrings[ 0 ], sv.baselines );
 	if( !recording )
 		return;
 
@@ -164,10 +164,11 @@ void SV_Demo_Stop( bool silent ) {
 	DemoMetadata metadata = { };
 	metadata.metadata_version = DEMO_METADATA_VERSION;
 	metadata.game_version = MakeSpan( CopyString( &temp, APP_VERSION ) );
-	metadata.server = MakeSpan( sv.configstrings[ CS_HOSTNAME ] );
+	metadata.server = MakeSpan( sv_hostname->value );
 	metadata.map = MakeSpan( sv.mapname );
 	metadata.utc_time = demo_utc_time;
 	metadata.duration_seconds = ( svs.gametime - demo_gametime ) / 1000;
+	metadata.decompressed_size = record_demo_context.decompressed_size;
 
 	StopRecordingDemo( &temp, &record_demo_context, metadata );
 	record_demo_context = { };

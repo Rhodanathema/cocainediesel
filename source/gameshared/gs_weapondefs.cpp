@@ -113,7 +113,7 @@ const WeaponDef weapon_defs[] = {
 		/* zoom inaccuracy      */ 0.0f,
 
 		// damages
-		/* damage               */ 9,
+		/* damage               */ 8,
 		/* self damage          */ 0,
 		/* wallbang damage      */ 0.5f,
 		/* knockback            */ 10,
@@ -280,7 +280,7 @@ const WeaponDef weapon_defs[] = {
 		/* category             */ WeaponCategory_Secondary,
 
 		/* projectile count     */ 1,
-		/* clip size            */ 5,
+		/* clip size            */ 8,
 		/* reload time          */ 600,
 		/* staged reload time   */ 600,
 
@@ -418,8 +418,8 @@ const WeaponDef weapon_defs[] = {
 		/* splash min knockback */ 25,
 
 		// projectile def
-		/* speed                */ 650,
-		/* spread               */ 0,
+		/* speed                */ 900,
+		/* spread               */ 3,
 	},
 
 	{
@@ -687,7 +687,7 @@ const WeaponDef weapon_defs[] = {
 		/* category             */ WeaponCategory_Secondary,
 
 		/* projectile count     */ 1,
-		/* clip size            */ 12,
+		/* clip size            */ 15,
 		/* reload time          */ 2000,
 		/* staged reload time   */ 0,
 
@@ -705,7 +705,7 @@ const WeaponDef weapon_defs[] = {
 		/* zoom inaccuracy      */ 0.0f,
 
 		// damages
-		/* damage               */ 10,
+		/* damage               */ 12,
 		/* self damage          */ 1,
 		/* wallbang damage      */ 0.0f,
 		/* knockback            */ 20,
@@ -772,17 +772,17 @@ const GadgetDef gadget_defs[] = {
 		/* short name       */ "hatchet",
 		/* uses             */ 1,
 		/* switch in time   */ WEAPONUP_TIME_FAST,
-		/* using time       */ 500,
+		/* using time       */ 50,
 		/* cook time        */ 1200,
-		/* switch out time  */ WEAPONDOWN_TIME,
+		/* switch out time  */ 400 + WEAPONDOWN_TIME,
 		/* damage           */ 50,
 		/* knockback        */ 100,
 		/* min damage       */ 25,
 		/* min knockback    */ 0,
 		/* splash radius    */ 0,
 		/* timeout          */ 5000,
-		/* speed            */ 2000,
-		/* min speed        */ 750,
+		/* speed            */ 2500,
+		/* min speed        */ 1500,
 	},
 
 	{
@@ -796,17 +796,17 @@ const GadgetDef gadget_defs[] = {
 		/* short name       */ "flash",
 		/* uses             */ 2,
 		/* switch in time   */ WEAPONUP_TIME_FAST,
-		/* using time       */ 500,
+		/* using time       */ 50,
 		/* cook time        */ 1200,
-		/* switch out time  */ WEAPONDOWN_TIME,
+		/* switch out time  */ 400 + WEAPONDOWN_TIME,
 		/* damage           */ 5,
 		/* knockback        */ 0,
 		/* min damage       */ 120,
 		/* min knockback    */ 0,
 		/* splash_radius    */ 2000,
-		/* timeout          */ 2500,
+		/* timeout          */ 1500,
 		/* speed            */ 1500,
-		/* min speed        */ 150,
+		/* min speed        */ 1000,
 	},
 };
 
@@ -816,7 +816,6 @@ const GadgetDef * GetGadgetDef( GadgetType gadget ) {
 	assert( gadget < Gadget_Count );
 	return &gadget_defs[ gadget ];
 }
-
 
 const PerkDef perk_defs[] = {
 	{ },
@@ -840,7 +839,7 @@ const PerkDef perk_defs[] = {
 		/* health           */ 65,
 		/* scale            */ Vec3( 0.8f, 0.8f, 0.625f ),
 		/* weight           */ 0.8f,
-		/* max speed        */ 280.0f,
+		/* max speed        */ 350.0f,
 		/* side speed       */ 500.0f,
 		/* max air speed    */ 600.0f,
 	},
@@ -881,7 +880,6 @@ const PerkDef perk_defs[] = {
 		/* max air speed    */ 600.0f,
 	}
 };
-
 
 const PerkDef * GetPerkDef( PerkType perk ) {
 	assert( perk < Perk_Count );

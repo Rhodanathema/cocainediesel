@@ -32,11 +32,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 static void Serialize( SerializationBuffer * buf, DemoMetadata & meta ) {
 	*buf & meta.metadata_version & meta.server & meta.map & meta.game_version & meta.utc_time;
 
-	if( meta.metadata_version >= 2 ) {
-		*buf & meta.duration_seconds;
-	}
-	else if( !buf->serializing ) {
-		meta.duration_seconds = 123;
+	if( meta.metadata_version >= DemoMetadataVersion_AddDurationAndDecompressedSize ) {
+		*buf & meta.duration_seconds & meta.decompressed_size;
 	}
 }
 
@@ -50,7 +47,7 @@ static void FlushDemo( RecordDemoContext * ctx, bool last ) {
 		if( !WritePartialFile( ctx->temp_file, out.dst, out.pos ) )
 			break;
 
-		bool done = last ? remaining == 0 : in.pos == ctx->in_buf_cursor;
+		bool done = last ? remaining == 0 : in.pos == in.size;
 		if( done )
 			break;
 	}
@@ -59,7 +56,7 @@ static void FlushDemo( RecordDemoContext * ctx, bool last ) {
 static void WriteToDemo( RecordDemoContext * ctx, const void * buf, size_t n ) {
 	size_t cursor = 0;
 	while( cursor < n ) {
-		size_t to_copy = Min2( n, ctx->in_buf_capacity - ctx->in_buf_cursor );
+		size_t to_copy = Min2( n - cursor, ctx->in_buf_capacity - ctx->in_buf_cursor );
 		memcpy( ( u8 * ) ctx->in_buf + ctx->in_buf_cursor, ( u8 * ) buf + cursor, to_copy );
 		ctx->in_buf_cursor += to_copy;
 		cursor += to_copy;
@@ -69,6 +66,8 @@ static void WriteToDemo( RecordDemoContext * ctx, const void * buf, size_t n ) {
 			ctx->in_buf_cursor = 0;
 		}
 	}
+
+	ctx->decompressed_size += n;
 }
 
 void WriteDemoMessage( RecordDemoContext * ctx, msg_t msg, size_t skip ) {
@@ -93,15 +92,20 @@ static void MaybeWriteDemoMessage( RecordDemoContext * ctx, msg_t * msg, bool fo
 static void CheckedZstdSetParameter( ZSTD_CStream * zstd, ZSTD_cParameter parameter, int value ) {
 	size_t err = ZSTD_CCtx_setParameter( zstd, parameter, value );
 	if( ZSTD_isError( err ) ) {
-		Fatal( "ZSTD_CCtx_setParameter( {}, {} ): {}", parameter, value, ZSTD_getErrorName( err ) );
+		Fatal( "ZSTD_CCtx_setParameter( %d, %d ): %s", parameter, value, ZSTD_getErrorName( err ) );
 	}
 }
 
 bool StartRecordingDemo(
 	TempAllocator * temp, RecordDemoContext * ctx, const char * filename, unsigned int spawncount, unsigned int snapFrameTime,
-	const char * configstrings, SyncEntityState * baselines
+	int max_clients, const char * configstrings, SyncEntityState * baselines
 ) {
 	*ctx = { };
+
+	if( !CreatePathForFile( temp, filename ) ) {
+		Com_Printf( S_COLOR_YELLOW "Can't open %s for writing\n", filename );
+		return false;
+	}
 
 	ctx->file = OpenFile( temp, filename, OpenFile_ReadWriteOverwrite );
 	if( ctx->file == NULL ) {
@@ -139,7 +143,9 @@ bool StartRecordingDemo(
 	MSG_WriteUint32( &msg, APP_PROTOCOL_VERSION );
 	MSG_WriteInt32( &msg, spawncount );
 	MSG_WriteInt16( &msg, (unsigned short)snapFrameTime );
+	MSG_WriteUint8( &msg, max_clients );
 	MSG_WriteInt16( &msg, -1 ); // playernum
+	MSG_WriteString( &msg, filename ); // server name
 	MSG_WriteString( &msg, "" ); // download url
 
 	// config strings
@@ -231,32 +237,46 @@ void StopRecordingDemo( TempAllocator * temp, RecordDemoContext * ctx, const Dem
 	}
 }
 
-static const DemoHeader * ReadDemoHeader( Span< const u8 > contents ) {
-	if( contents.n < sizeof( DemoHeader ) )
+static const DemoHeader * ReadDemoHeader( Span< const u8 > demo ) {
+	if( demo.n < sizeof( DemoHeader ) )
 		return NULL;
 
-	const DemoHeader * header = ( const DemoHeader * ) contents.ptr;
+	const DemoHeader * header = ( const DemoHeader * ) demo.ptr;
 	if( memcmp( &header->magic, DEMO_METADATA_MAGIC, sizeof( DEMO_METADATA_MAGIC ) ) != 0 )
 		return NULL;
 
-	if( contents.n < sizeof( DemoHeader ) + header->metadata_size )
+	if( demo.n < sizeof( DemoHeader ) + header->metadata_size )
 		return NULL;
 
 	return header;
 }
 
-bool ReadDemoMetadata( Allocator * a, DemoMetadata * metadata, Span< const u8 > contents ) {
-	const DemoHeader * header = ReadDemoHeader( contents );
+bool ReadDemoMetadata( Allocator * a, DemoMetadata * metadata, Span< const u8 > demo ) {
+	*metadata = { };
+
+	const DemoHeader * header = ReadDemoHeader( demo );
 	if( header == NULL )
 		return false;
 
-	Span< const u8 > serialised_metadata = contents.slice( sizeof( DemoHeader ), sizeof( DemoHeader ) + header->metadata_size );
+	Span< const u8 > serialised_metadata = demo.slice( sizeof( DemoHeader ), sizeof( DemoHeader ) + header->metadata_size );
 	return Deserialize( a, metadata, serialised_metadata.ptr, serialised_metadata.n );
 }
 
-bool DecompressDemo( Allocator * a, Span< u8 > * decompressed, Span< const u8 > contents ) {
-	const DemoHeader * header = ReadDemoHeader( contents );
-	if( header == NULL )
+bool DecompressDemo( Allocator * a, const DemoMetadata & metadata, Span< u8 > * decompressed, Span< const u8 > demo ) {
+	TracyZoneScoped;
+
+	const DemoHeader * header = ReadDemoHeader( demo );
+	assert( header != NULL );
+
+	*decompressed = ALLOC_SPAN( a, u8, metadata.decompressed_size );
+	Span< const u8 > compressed = demo.slice( sizeof( DemoHeader ) + header->metadata_size, demo.n );
+
+	size_t r = ZSTD_decompress( decompressed->ptr, decompressed->n, compressed.ptr, compressed.n );
+	if( r != decompressed->n ) {
+		Com_Printf( S_COLOR_RED "Can't decompress demo: %s\n", ZSTD_getErrorName( r ) );
+		FREE( sys_allocator, decompressed->ptr );
 		return false;
-	return Decompress( "TODO", a, contents.slice( sizeof( DemoHeader ) + header->metadata_size, contents.n ), decompressed );
+	}
+
+	return true;
 }

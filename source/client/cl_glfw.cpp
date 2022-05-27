@@ -255,7 +255,7 @@ static void OnGlfwError( int code, const char * message ) {
 		return;
 
 	if( code == GLFW_VERSION_UNAVAILABLE ) {
-		Fatal( "Your PC is too old. You need a GPU that can support OpenGL 4.3" );
+		Fatal( "Your PC is too old. You need a GPU that can support OpenGL 4.5" );
 	}
 
 	Fatal( "GLFW error %d: %s", code, message );
@@ -356,8 +356,11 @@ void CreateWindow( WindowMode mode ) {
 	}
 }
 
+void CheckForLeaks();
+
 void DestroyWindow() {
 	TracyZoneScoped;
+	CheckForLeaks();
 	glfwDestroyWindow( window );
 }
 
@@ -468,7 +471,7 @@ Vec2 GetJoystickMovement() {
 		acc.x += axes[ GLFW_GAMEPAD_AXIS_LEFT_X ];
 		acc.y -= axes[ GLFW_GAMEPAD_AXIS_LEFT_Y ];
 
-		constexpr float deadzone = 0.1f;
+		constexpr float deadzone = 0.25f;
 		acc.x = Unlerp01( deadzone, Abs( acc.x ), 1.0f ) * SignedOne( acc.x );
 		acc.y = Unlerp01( deadzone, Abs( acc.y ), 1.0f ) * SignedOne( acc.y );
 	}
@@ -542,7 +545,10 @@ int main( int argc, char ** argv ) {
 			oldtime += dt;
 		}
 
-		glfwPollEvents();
+		{
+			TracyZoneScopedN( "glfwPollEvents" );
+			glfwPollEvents();
+		}
 
 		if( !Qcommon_Frame( dt ) ) {
 			break;

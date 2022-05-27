@@ -243,9 +243,7 @@ static void CG_Event_FireBullet( Vec3 origin, Vec3 dir, u16 entropy, s16 zoom_ti
 
 	Mat4 muzzle_transform = GetMuzzleTransform( owner );
 
-	if( weapon != Weapon_Pistol ) {
-		AddPersistentBeam( muzzle_transform.col3.xyz(), trace.endpos, 1.0f, team_color, "weapons/tracer", 0.2f, 0.1f );
-	}
+	AddPersistentBeam( muzzle_transform.col3.xyz(), trace.endpos, 1.0f, team_color, "weapons/tracer", 0.2f, 0.1f );
 }
 
 static void CG_Event_FireShotgun( Vec3 origin, Vec3 dir, int owner, Vec4 team_color ) {
@@ -498,11 +496,11 @@ static void CG_Event_Jetpack( const SyncEntityState * ent, u64 parm ) {
 }
 
 void CG_JetpackEffect( centity_t * cent ) {
-	if( cg.frame.playerStates[ cent->current.number - 1 ].perk != Perk_Jetpack ) {
+	if( cent->localEffects[ LOCALEFFECT_JETPACK ] == 0 ) {
 		return;
 	}
 
-	float volume = cent->jetpack_boost ? 4.0f : 1.0f;
+	float volume = cent->jetpack_boost ? 1.5f : 1.0f;
 
 	if( cent->localEffects[ LOCALEFFECT_JETPACK ] <= cl.serverTime ) {
 		if( cent->localEffects[ LOCALEFFECT_JETPACK ] ) {
@@ -765,33 +763,10 @@ void CG_EntityEvent( SyncEntityState * ent, int ev, u64 parm, bool predicted ) {
 			CG_Event_Die( ent->ownerNum, parm );
 			break;
 
-		case EV_EXPLOSION1:
-			CG_GenericExplosion( ent->origin, Vec3( 0.0f ), parm * 8 );
+		case EV_BOMB_EXPLOSION:
+			DoVisualEffect( "models/bomb/explosion", ent->origin, Vec3( 0.0f, 0.0f, 1.0f ), 1.0f, vec4_white );
+			PlaySFX( "models/bomb/explode", PlaySFXConfigPosition( ent->origin ) );
 			break;
-
-		case EV_EXPLOSION2:
-			CG_GenericExplosion( ent->origin, Vec3( 0.0f ), parm * 16 );
-			break;
-
-		case EV_SPARKS: {
-			// Vec3 dir = U64ToDir( parm );
-			// if( ent->damage > 0 ) {
-			// 	count = Clamp( 1, int( ent->damage * 0.25f ), 10 );
-			// } else {
-			// 	count = 6;
-			// }
-
-			// CG_ParticleEffect( ent->origin, dir, 1.0f, 0.67f, 0.0f, count );
-		} break;
-
-		case EV_LASER_SPARKS: {
-			// Vec3 dir = U64ToDir( parm );
-			// CG_ParticleEffect2( ent->origin, dir,
-			// 					COLOR_R( ent->colorRGBA ) * ( 1.0 / 255.0 ),
-			// 					COLOR_G( ent->colorRGBA ) * ( 1.0 / 255.0 ),
-			// 					COLOR_B( ent->colorRGBA ) * ( 1.0 / 255.0 ),
-			// 					ent->counterNum );
-		} break;
 
 		case EV_GIB:
 			SpawnGibs( ent->origin, ent->origin2, parm, team_color );
@@ -858,10 +833,6 @@ void CG_EntityEvent( SyncEntityState * ent, int ev, u64 parm, bool predicted ) {
 			float volume = Min2( 1.0f, parm / float( U16_MAX ) );
 			PlaySFX( "weapons/gl/bounce", PlaySFXConfigEntity( ent->number, volume ) );
 		} break;
-
-		case EV_BLADE_IMPACT:
-			// CG_BladeImpact( ent->origin, ent->origin2 );
-			break;
 
 		case EV_RIFLEBULLET_IMPACT: {
 			Vec3 normal = U64ToDir( parm );
@@ -978,6 +949,10 @@ void CG_EntityEvent( SyncEntityState * ent, int ev, u64 parm, bool predicted ) {
 
 		case EV_VFX:
 			DoVisualEffect( StringHash( parm ), ent->origin, Vec3( 0.0f, 0.0f, 1.0f ), 1, vec4_white );
+			break;
+
+		case EV_FLASH_WINDOW:
+			FlashWindow();
 			break;
 
 		case EV_SUICIDE_BOMB_ANNOUNCEMENT:

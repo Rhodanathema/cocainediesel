@@ -6,7 +6,6 @@
 
 static char * root_dir_path;
 static char * home_dir_path;
-static char * old_home_dir_path;
 
 static char * FindRootDir( Allocator * a ) {
 	char * root = GetExePath( a );
@@ -19,20 +18,15 @@ void InitFS() {
 
 	if( !is_public_build ) {
 		home_dir_path = CopyString( sys_allocator, root_dir_path );
-		old_home_dir_path = CopyString( sys_allocator, home_dir_path );
 	}
 	else {
 		home_dir_path = FindHomeDirectory( sys_allocator );
-
-		const char * fmt = IFDEF( PLATFORM_WINDOWS ) ? "{} 0.0" : "{}-0.0";
-		old_home_dir_path = ( *sys_allocator )( fmt, home_dir_path );
 	}
 }
 
 void ShutdownFS() {
 	FREE( sys_allocator, root_dir_path );
 	FREE( sys_allocator, home_dir_path );
-	FREE( sys_allocator, old_home_dir_path );
 }
 
 const char * RootDirPath() {
@@ -41,10 +35,6 @@ const char * RootDirPath() {
 
 const char * HomeDirPath() {
 	return home_dir_path;
-}
-
-const char * OldHomeDirPath() {
-	return old_home_dir_path;
 }
 
 size_t FileSize( FILE * file ) {
@@ -95,8 +85,8 @@ Span< u8 > ReadFileBinary( Allocator * a, const char * path ) {
 	return Span< u8 >( contents, size );
 }
 
-bool FileExists( Allocator * temp, const char * path ) {
-	FILE * file = OpenFile( temp, path, OpenFile_Read );
+bool FileExists( Allocator * a, const char * path ) {
+	FILE * file = OpenFile( a, path, OpenFile_Read );
 	if( file == NULL )
 		return false;
 	fclose( file );
@@ -132,11 +122,11 @@ bool CreatePathForFile( Allocator * a, const char * path ) {
 	return true;
 }
 
-bool WriteFile( TempAllocator * temp, const char * path, const void * data, size_t len ) {
-	if( !CreatePathForFile( temp, path ) )
+bool WriteFile( Allocator * a, const char * path, const void * data, size_t len ) {
+	if( !CreatePathForFile( a, path ) )
 		return false;
 
-	FILE * file = OpenFile( temp, path, OpenFile_WriteOverwrite );
+	FILE * file = OpenFile( a, path, OpenFile_WriteOverwrite );
 	if( file == NULL )
 		return false;
 

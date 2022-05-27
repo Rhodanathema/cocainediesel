@@ -192,7 +192,7 @@ local function join_libs( names )
 end
 
 local function printf( form, ... )
-	print( form:format( ... ) )
+	print( form and form:format( ... ) or "" )
 end
 
 local function glob_impl( dir, rel, res, prefix, suffix, recursive )
@@ -269,6 +269,10 @@ function prebuilt_dll( lib_name, dll )
 	prebuilt_dlls[ lib_name ] = dll
 end
 
+function global_cxxflags( flags )
+	cxxflags = cxxflags .. " " .. flags
+end
+
 function obj_cxxflags( pattern, flags )
 	table.insert( objs_extra_flags, { pattern = pattern, flags = flags } )
 end
@@ -285,17 +289,42 @@ local function toolchain_helper( t, f )
 	end
 end
 
+msvc_global_cxxflags = toolchain_helper( "msvc", global_cxxflags )
 msvc_obj_cxxflags = toolchain_helper( "msvc", obj_cxxflags )
 msvc_obj_replace_cxxflags = toolchain_helper( "msvc", obj_replace_cxxflags )
 
+gcc_global_cxxflags = toolchain_helper( "gcc", global_cxxflags )
 gcc_obj_cxxflags = toolchain_helper( "gcc", obj_cxxflags )
 gcc_obj_replace_cxxflags = toolchain_helper( "gcc", obj_replace_cxxflags )
 
-printf( "builddir = build" )
-printf( "cxxflags = %s", cxxflags )
-printf( "ldflags = %s", ldflags )
+local function sort_by_key( t )
+	local ret = { }
+	for k, v in pairs( t ) do
+		table.insert( ret, { key = k, value = v } )
+	end
+	table.sort( ret, function( a, b ) return a.key < b.key end )
 
-if toolchain == "msvc" then
+	function iter()
+		for _, x in ipairs( ret ) do
+			coroutine.yield( x.key, x.value )
+		end
+	end
+
+	return coroutine.wrap( iter )
+end
+
+local function rule_for_src( src_name )
+	local ext = src_name:match( "([^%.]+)$" )
+	return ( { cpp = "cpp" } )[ ext ]
+end
+
+function write_ninja_script()
+	printf( "builddir = build" )
+	printf( "cxxflags = %s", cxxflags )
+	printf( "ldflags = %s", ldflags )
+	printf()
+
+	if toolchain == "msvc" then
 
 printf( [[
 rule cpp
@@ -320,7 +349,7 @@ rule copy
     description = $in
 ]] )
 
-elseif toolchain == "gcc" then
+	elseif toolchain == "gcc" then
 
 printf( "cpp = %s", rightmost( "cxx" ) )
 printf( [[
@@ -339,7 +368,7 @@ rule copy
     description = $in
 ]] )
 
-if config ~= "release" then
+		if config ~= "release" then
 
 printf( [[
 rule bin
@@ -347,7 +376,7 @@ rule bin
     description = $out
 ]] )
 
-else
+		else
 
 printf( [[
 rule bin
@@ -355,16 +384,9 @@ rule bin
     description = $out
 ]] )
 
-end
+		end
+	end
 
-end
-
-local function rule_for_src( src_name )
-	local ext = src_name:match( "([^%.]+)$" )
-	return ( { cpp = "cpp" } )[ ext ]
-end
-
-function write_ninja_script()
 	for _, flag in ipairs( objs_flags ) do
 		for name, cfg in pairs( objs ) do
 			if name:match( flag.pattern ) then
@@ -381,7 +403,7 @@ function write_ninja_script()
 		end
 	end
 
-	for src_name, cfg in pairs( objs ) do
+	for src_name, cfg in sort_by_key( objs ) do
 		local rule = rule_for_src( src_name )
 		printf( "build %s/%s%s: %s %s", dir, src_name, obj_suffix, rule, src_name )
 		if cfg.cxxflags then
@@ -392,11 +414,15 @@ function write_ninja_script()
 		end
 	end
 
-	for lib_name, srcs in pairs( libs ) do
+	printf()
+
+	for lib_name, srcs in sort_by_key( libs ) do
 		printf( "build %s/%s%s%s: lib %s", dir, lib_prefix, lib_name, lib_suffix, join_srcs( srcs, obj_suffix ) )
 	end
 
-	for lib_name, dll in pairs( prebuilt_dlls ) do
+	printf()
+
+	for lib_name, dll in sort_by_key( prebuilt_dlls ) do
 		local src_path = "libs/" .. lib_name .. "/" ..  dll .. dll_suffix
 		local dst_path = output_dir .. dll .. dll_suffix
 		if OS == "windows" then
@@ -407,7 +433,9 @@ function write_ninja_script()
 		printf( "build %s: copy %s", dst_path, src_path );
 	end
 
-	for bin_name, cfg in pairs( bins ) do
+	printf()
+
+	for bin_name, cfg in sort_by_key( bins ) do
 		local srcs = { cfg.srcs }
 
 		if OS == "windows" and cfg.rc then

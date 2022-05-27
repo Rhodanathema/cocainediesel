@@ -19,8 +19,9 @@ constexpr size_t MAX_COMMANDS = 1024;
 static ConsoleCommand commands[ MAX_COMMANDS ];
 static Hashtable< MAX_COMMANDS * 2 > commands_hashtable;
 
-static Span< const char > GrabLine( Span< const char > str ) {
+static Span< const char > GrabLine( Span< const char > str, bool * eof ) {
 	const char * newline = ( const char * ) memchr( str.ptr, '\n', str.n );
+	*eof = newline == NULL;
 	return newline == NULL ? str : str.slice( 0, newline - str.ptr );
 }
 
@@ -101,12 +102,16 @@ void Cmd_ExecuteLine( const char * line ) {
 static void Cmd_Execute( const char * str, bool skip_comments ) {
 	Span< const char > cursor = MakeSpan( str );
 	while( cursor.n > 0 ) {
-		Span< const char > line = GrabLine( cursor );
+		bool eof;
+		Span< const char > line = GrabLine( cursor, &eof );
 		if( !skip_comments || !StartsWith( line, "//" ) ) {
 			Cmd_ExecuteLine( line, true );
 		}
 
-		cursor += line.n + 1;
+		cursor += line.n;
+		if( !eof ) {
+			cursor++;
+		}
 	}
 }
 
@@ -183,20 +188,6 @@ static void Cmd_Exec_f() {
 
 	const char * fmt = is_public_build ? "{}/{}" : "{}/base/{}";
 	DynamicString path( sys_allocator, fmt, HomeDirPath(), Cmd_Argv( 1 ) );
-	if( FileExtension( path.c_str() ) == "" ) {
-		path += ".cfg";
-	}
-
-	ExecConfig( path.c_str() );
-}
-
-static void Cmd_ExecOld_f() {
-	if( Cmd_Argc() < 2 ) {
-		Com_Printf( "Usage: execold <filename>\n" );
-		return;
-	}
-
-	DynamicString path( sys_allocator, "{}/base/{}", OldHomeDirPath(), Cmd_Argv( 1 ) );
 	if( FileExtension( path.c_str() ) == "" ) {
 		path += ".cfg";
 	}
@@ -387,7 +378,6 @@ static Span< const char * > TabCompleteConfig( TempAllocator * a, const char * p
 
 void Cmd_Init() {
 	AddCommand( "exec", Cmd_Exec_f );
-	AddCommand( "execold", Cmd_ExecOld_f );
 	AddCommand( "config", Cmd_Config_f );
 	AddCommand( "find", Cmd_Find_f );
 
@@ -397,7 +387,6 @@ void Cmd_Init() {
 
 void Cmd_Shutdown() {
 	RemoveCommand( "exec" );
-	RemoveCommand( "execold" );
 	RemoveCommand( "config" );
 	RemoveCommand( "find" );
 

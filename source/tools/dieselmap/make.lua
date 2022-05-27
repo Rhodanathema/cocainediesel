@@ -1,5 +1,6 @@
 local windows_srcs = {
 	"source/windows/win_fs.cpp",
+	"source/windows/win_sys.cpp",
 	"source/windows/win_threads.cpp",
 }
 
@@ -30,6 +31,7 @@ bin( "dieselmap", {
 	libs = {
 		"ggformat",
 		"tracy",
+		"zstd",
 	},
 
 	msvc_extra_ldflags = "ole32.lib",

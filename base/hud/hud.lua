@@ -39,37 +39,36 @@ local function DrawTopInfo( state )
 			end
 		end
 	elseif state.match_state == MatchState_Playing then
-		options.font_size = state.viewport_height / 25
-		local seconds = cd.getClockTime()
+		if state.gametype == Gametype_Bomb then
+			options.font_size = state.viewport_height / 25
 
-		if seconds >= 0 then
-			local minutes = seconds / 60
-			seconds = seconds % 60
+			local seconds = cd.getClockTime()
+			if seconds >= 0 then
+				local minutes = seconds / 60
+				seconds = seconds % 60
 
-			if minutes < 1 and seconds < 11 and seconds ~= 0 then
-				options.color = "#f00"
+				if minutes < 1 and seconds < 11 and seconds ~= 0 then
+					options.color = "#f00" -- TODO: attention getting red
+				end
+				cd.text( options, posX, state.viewport_height * 0.012, string.format( "%d:%02i", minutes, seconds ) )
+			else
+				local size = state.viewport_height * 0.055
+				cd.box( posX - size/2.4, state.viewport_height * 0.025 - size/2, size, size, "#fff", assets.bomb )
 			end
-			cd.text( options, posX, state.viewport_height * 0.012, string.format( "%d:%02i", minutes, seconds ) )
-		elseif state.teambased then
-			local size = state.viewport_height * 0.055
-			cd.box( posX - size/2.4, state.viewport_height * 0.025 - size/2, size, size, dark_grey, assets.bomb )
-		end
 
-
-		if state.teambased then
-			options.color = cd.getTeamColor( TEAM_ALPHA )
+			options.color = cd.getTeamColor( Team_One )
 			cd.text( options, posX - posX / 11, state.viewport_height * 0.012, state.scoreAlpha )
-			options.color = cd.getTeamColor( TEAM_BETA )
+			options.color = cd.getTeamColor( Team_Two )
 			cd.text( options, posX + posX / 11, state.viewport_height * 0.012, state.scoreBeta )
 
 			local y = state.viewport_height * 0.008
 			local scaleX = state.viewport_height / 40
 			local scaleY = scaleX * 1.6
 			local step = scaleX
-			local grey = "#555"
+			local grey = "#222"
 			local material = assets.guy
 
-			local color = cd.getTeamColor( TEAM_ALPHA )
+			local color = cd.getTeamColor( Team_One )
 			local x = posX - posX * 0.2
 
 			for i = 0, state.totalAlpha - 1, 1 do
@@ -80,7 +79,7 @@ local function DrawTopInfo( state )
 				end
 			end
 
-			color = cd.getTeamColor( TEAM_BETA )
+			color = cd.getTeamColor( Team_Two )
 			x = posX + posX * 0.2
 
 			for i = 0, state.totalBeta - 1, 1 do
@@ -156,7 +155,7 @@ local function DrawPerk( state, x, y, size, outline_size )
 end
 
 local function DrawUtility( state, options, x, y, size, outline_size )
-	if state.gadget ~= Gadget_None then
+	if state.gadget ~= Gadget_None and state.gadget_ammo ~= 0 then
 		options.font_size = size * 0.3
 		if hotkeys( state ) then
 			options.color = "#fff"
@@ -269,7 +268,7 @@ local function DrawPlayerBar( state )
 	width -= padding * 2
 
 	local bg_color = RGBALinear( 0.04, 0.04, 0.04, 1 )
-	local stamina_color = cd.getTeamColor( TEAM_ALLY )
+	local stamina_color = cd.allyColor()
 
 	if state.perk == Perk_Hooligan then
 		cd.box( x, y, width, stamina_bar_height, bg_color )
@@ -367,10 +366,17 @@ end
 
 local function DrawBombProgress( state )
 	if state.bomb_progress ~= 0 then
-		local width = state.viewport_width * 0.3
-		local progress = state.bomb_progress/100
-		local color = RGBALinear( 1, 1, 1, progress )
-		cd.box( (state.viewport_width - width)/2, state.viewport_height * 0.7, width * progress, state.viewport_height / 30, color )
+		local width = state.viewport_width * 0.2
+		local height = state.viewport_height / 30
+		local y = state.viewport_height * 0.8
+		local progress = state.bomb_progress / 100
+
+		cd.box( ( state.viewport_width - width ) * 0.5, y, width, height, "#2228" )
+		cd.box( ( state.viewport_width - width * progress ) * 0.5, y, width * progress, height, cd.allyColor() )
+
+		local text = { color = "#fff", border = "#000", font_size = height * 0.75, alignment = "center middle" }
+		local message = if state.bomb_progress_type == BombProgress_Planting then "Planting..." else "Defusing..."
+		cd.text( text, state.viewport_width * 0.5, y + height * 0.4, message )
 	end
 end
 
@@ -443,10 +449,10 @@ local function DrawCallvote( state )
 
 	options.font_size *= 0.8
 	options.alignment = "left bottom"
-	cd.text( options, xleft, ybottom, "["..cd.getBind("vote yes").."] Vote yes" )
+	cd.text( options, xleft, ybottom, "["..cd.getBind("vote_yes").."] Vote yes" )
 
 	options.alignment = "right bottom"
-	cd.text( options, xright, ybottom, "["..cd.getBind("vote no").."] Vote no" )
+	cd.text( options, xright, ybottom, "["..cd.getBind("vote_no").."] Vote no" )
 end
 
 local function DrawYogaStuff( state )

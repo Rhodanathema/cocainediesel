@@ -6,7 +6,14 @@
 static u64 zero_time;
 
 void InitTime() {
-	zero_time = ggtime();
+	if( is_public_build ) {
+		zero_time = ggtime();
+	}
+	else {
+		// start at 1 year to catch float precision bugs
+		// we still have such bugs so only do it in debug for now
+		zero_time = ggtime() - Days( 365 ).flicks;
+	}
 }
 
 static void AssertSmallEnoughToCastToFloat( Time t ) {
@@ -32,11 +39,11 @@ Time Hz( u64 hz ) {
 }
 
 bool operator==( Time lhs, Time rhs ) { return lhs.flicks == rhs.flicks; }
-bool operator!=( Time lhs, Time rhs ) { return !( lhs == rhs ); }
+bool operator!=( Time lhs, Time rhs ) { return lhs.flicks != rhs.flicks; }
 bool operator<( Time lhs, Time rhs ) { return lhs.flicks < rhs.flicks; }
-bool operator<=( Time lhs, Time rhs ) { return lhs < rhs || lhs == rhs; }
+bool operator<=( Time lhs, Time rhs ) { return lhs.flicks <= rhs.flicks; }
 bool operator>( Time lhs, Time rhs ) { return lhs.flicks > rhs.flicks; }
-bool operator>=( Time lhs, Time rhs ) { return lhs > rhs || lhs == rhs; }
+bool operator>=( Time lhs, Time rhs ) { return lhs.flicks >= rhs.flicks; }
 Time operator+( Time lhs, Time rhs ) { return { lhs.flicks + rhs.flicks }; }
 Time operator-( Time lhs, Time rhs ) { return { lhs.flicks - rhs.flicks }; }
 

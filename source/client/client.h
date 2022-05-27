@@ -83,6 +83,7 @@ struct client_state_t {
 	// server state information
 	//
 	int servercount;        // server identification for prespawns
+	int max_clients;
 	int playernum;
 
 	char configstrings[MAX_CONFIGSTRINGS][MAX_CONFIGSTRING_CHARS];
@@ -134,6 +135,7 @@ struct client_static_t {
 
 	NetAddress rconaddress;       // address where we are sending rcon messages, to ignore other print packets
 
+	char * server_name;
 	char * download_url;              // http://<httpaddress>/
 
 	bool rejected;          // these are used when the server rejects our connection
@@ -293,7 +295,6 @@ void CL_CancelDownload();
 //
 void SCR_InitScreen();
 void SCR_UpdateScreen();
-void SCR_DebugGraph( float value, float r, float g, float b );
 
 void CL_AddNetgraph();
 

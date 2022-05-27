@@ -24,13 +24,6 @@
 #include "qcommon/rng.h"
 #include "game/g_local.h"
 
-//=============================================================================
-
-#define HEARTBEAT_SECONDS               300
-#define TTL_MASTERS                     24 * 60 * 60
-
-#define USERINFO_UPDATE_COOLDOWN_MSEC   2000
-
 // some commands are only valid before the server has finished
 // initializing (precache commands, static sounds / objects, etc)
 
@@ -90,7 +83,7 @@ struct client_t {
 
 	char userinfo[MAX_INFO_STRING];         // name, etc
 	char userinfoLatched[MAX_INFO_STRING];  // flood prevention - actual userinfo updates are delayed
-	int64_t userinfoLatchTimeout;
+	Time userinfoLatchTimeout;
 
 	bool mv;                        // send multiview data to the client
 
@@ -182,11 +175,10 @@ struct server_static_t {
 };
 
 struct server_constant_t {
-	int64_t nextHeartbeat;
+	Time nextHeartbeat;
 	unsigned int snapFrameTime;     // msecs between server packets
 	unsigned int gameFrameTime;     // msecs between game code executions
-	bool autostarted;
-	int64_t lastMasterResolve;
+	Time lastMasterResolve;
 };
 
 //=============================================================================
@@ -203,6 +195,7 @@ extern Cvar *sv_port;
 
 extern Cvar *sv_downloadurl;
 
+extern Cvar *sv_hostname;
 extern Cvar *sv_maxclients;
 
 extern Cvar *sv_showChallenge;
@@ -244,7 +237,6 @@ void SV_UpdateMaster();
 //
 void SV_InitGame();
 void SV_Map( const char *level, bool devmap );
-void SV_SetServerConfigStrings();
 
 //
 // sv_send.c
@@ -309,9 +301,6 @@ void SV_BuildClientFrameSnap( client_t *client );
 //
 // sv_game.c
 //
-void SV_InitGameProgs();
-void SV_ShutdownGameProgs();
-
 void PF_DropClient( edict_t *ent, const char *message );
 int PF_GetClientState( int numClient );
 void PF_GameCmd( edict_t *ent, const char *cmd );

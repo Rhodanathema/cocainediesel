@@ -71,14 +71,13 @@ static void G_GS_Trace( trace_t *tr, Vec3 start, Vec3 mins, Vec3 maxs, Vec3 end,
 * give gameshared access to some utilities
 */
 static void G_InitGameShared() {
-	int maxclients = atoi( PF_GetConfigString( CS_MAXCLIENTS ) );
-	if( maxclients < 1 || maxclients > MAX_EDICTS ) {
-		Fatal( "Invalid maxclients value %i\n", maxclients );
+	if( sv_maxclients->integer < 1 || sv_maxclients->integer > MAX_EDICTS ) {
+		Fatal( "Invalid maxclients value %d\n", sv_maxclients->integer );
 	}
 
 	server_gs = { };
 	server_gs.module = GS_MODULE_GAME;
-	server_gs.maxclients = maxclients;
+	server_gs.maxclients = sv_maxclients->integer;
 
 	server_gs.api.PredictedEvent = G_PredictedEvent;
 	server_gs.api.PredictedFireWeapon = G_PredictedFireWeapon;
@@ -219,7 +218,7 @@ void G_ExitLevel() {
 
 		if( loadmap ) {
 			ent->r.client->connecting = true; // set all connected players as "reconnecting"
-			ent->s.team = TEAM_SPECTATOR;
+			ent->s.team = Team_None;
 		}
 	}
 }

@@ -22,9 +22,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon/compression.h"
 #include "qcommon/cmodel.h"
 #include "qcommon/fs.h"
+#include "qcommon/srgb.h"
 #include "game/g_local.h"
-
-static u64 entity_id_seq;
 
 enum EntityFieldType {
 	EntityField_Int,
@@ -77,7 +76,6 @@ static constexpr EntityField entity_keys[] = {
 	// temp spawn vars -- only valid when the spawn function is called
 	{ "lip", STOFS( lip ), EntityField_Int, true },
 	{ "distance", STOFS( distance ), EntityField_Int, true },
-	{ "radius", STOFS( radius ), EntityField_Float, true },
 	{ "height", STOFS( height ), EntityField_Int, true },
 	{ "noise", STOFS( noise ), EntityField_StringHash, true },
 	{ "noise_start", STOFS( noise_start ), EntityField_StringHash, true },
@@ -86,6 +84,7 @@ static constexpr EntityField entity_keys[] = {
 	{ "gameteam", STOFS( gameteam ), EntityField_Int, true },
 	{ "size", STOFS( size ), EntityField_Int, true },
 	{ "spawn_probability", STOFS( spawn_probability ), EntityField_Float, true },
+	{ "power", STOFS( power ), EntityField_Float, true },
 };
 
 static void SP_worldspawn( edict_t * ent, const spawn_temp_t * st );
@@ -198,12 +197,12 @@ static void ED_ParseField( Span< const char > key, Span< const char > value, edi
 			} break;
 
 			case EntityField_RGBA: {
-				RGBA8 rgba;
-				rgba.r = ParseInt( &value, 255, Parse_StopOnNewLine );
-				rgba.g = ParseInt( &value, 255, Parse_StopOnNewLine );
-				rgba.b = ParseInt( &value, 255, Parse_StopOnNewLine );
-				rgba.a = ParseInt( &value, 255, Parse_StopOnNewLine );
-				*(RGBA8 *)( b + f.ofs ) = rgba;
+				Vec4 rgba;
+				rgba.x = ParseFloat( &value, 1.0f, Parse_StopOnNewLine );
+				rgba.y = ParseFloat( &value, 1.0f, Parse_StopOnNewLine );
+				rgba.z = ParseFloat( &value, 1.0f, Parse_StopOnNewLine );
+				rgba.w = ParseFloat( &value, 1.0f, Parse_StopOnNewLine );
+				*(RGBA8 *)( b + f.ofs ) = LinearTosRGB( rgba );
 			} break;
 		}
 		return;
@@ -240,8 +239,6 @@ static void ED_ParseEntity( Span< const char > * cursor, edict_t * ent, spawn_te
 }
 
 static void G_FreeEntities() {
-	ResetEntityIDSequence();
-
 	if( !level.time ) {
 		memset( game.edicts, 0, game.maxentities * sizeof( game.edicts[0] ) );
 	}
@@ -308,6 +305,8 @@ static void SpawnMapEntities() {
 * parsing textual entity definitions out of an ent file.
 */
 void G_InitLevel( const char *mapname, int64_t levelTime ) {
+	ResetEntityIDSequence();
+
 	GClip_ClearWorld(); // clear areas links
 
 	memset( &level, 0, sizeof( level_locals_t ) );
@@ -330,8 +329,6 @@ void G_InitLevel( const char *mapname, int64_t levelTime ) {
 	}
 
 	// initialize game subsystems
-	PF_ConfigString( CS_MATCHSCORE, "" );
-
 	G_InitGameCommands();
 
 	G_Teams_Init();
@@ -346,7 +343,7 @@ void G_InitLevel( const char *mapname, int64_t levelTime ) {
 
 	for( int i = 0; i < server_gs.maxclients; i++ ) {
 		if( game.edicts[ i + 1 ].r.inuse ) {
-			G_Teams_SetTeam( &game.edicts[ i + 1 ], TEAM_SPECTATOR );
+			G_Teams_SetTeam( &game.edicts[ i + 1 ], Team_None );
 		}
 	}
 
@@ -447,12 +444,4 @@ static void SP_worldspawn( edict_t * ent, const spawn_temp_t * st ) {
 	const char * model_name = "*0";
 	ent->s.model = StringHash( Hash64( model_name, strlen( model_name ), svs.cms->base_hash ) );
 	GClip_SetBrushModel( ent );
-}
-
-EntityID NewEntity() {
-	return { entity_id_seq++ };
-}
-
-void ResetEntityIDSequence() {
-	entity_id_seq = 1;
 }

@@ -77,7 +77,7 @@ void CL_DemoBaseline( const snapshot_t * snap ) {
 	defer { FREE( sys_allocator, record_demo_filename ); };
 
 	TempAllocator temp = cls.frame_arena.temp();
-	StartRecordingDemo( &temp, &record_demo_context, record_demo_filename, cl.servercount, cl.snapFrameTime, cl.configstrings[ 0 ], cl_baselines );
+	StartRecordingDemo( &temp, &record_demo_context, record_demo_filename, cl.servercount, cl.snapFrameTime, client_gs.maxclients, cl.configstrings[ 0 ], cl_baselines );
 }
 
 void CL_Record_f() {
@@ -138,20 +138,25 @@ void CL_StopRecording( bool silent ) {
 	DemoMetadata metadata = { };
 	metadata.metadata_version = DEMO_METADATA_VERSION;
 	metadata.game_version = MakeSpan( CopyString( &temp, APP_VERSION ) );
-	metadata.server = MakeSpan( cl.configstrings[ CS_HOSTNAME ] );
+	metadata.server = MakeSpan( cls.server_name );
 	metadata.map = MakeSpan( CopyString( &temp, cl.map->name ) );
 	metadata.utc_time = record_demo_utc_time;
 	metadata.duration_seconds = ( cls.gametime - record_demo_gametime ) / 1000;
+	metadata.decompressed_size = record_demo_context.decompressed_size;
 
 	StopRecordingDemo( &temp, &record_demo_context, metadata );
 
 	record_demo_context = { };
 }
 
-void CL_DemoCompleted() {
+static void FreeDemoMetadata() {
 	FREE( sys_allocator, playing_demo_metadata.game_version.ptr );
 	FREE( sys_allocator, playing_demo_metadata.server.ptr );
 	FREE( sys_allocator, playing_demo_metadata.map.ptr );
+}
+
+void CL_DemoCompleted() {
+	FreeDemoMetadata();
 	FREE( sys_allocator, playing_demo_contents.data );
 	playing_demo_contents = { };
 
@@ -206,9 +211,12 @@ static void CL_StartDemo( const char * demoname, bool yolo ) {
 	defer { FREE( sys_allocator, demo.ptr ); };
 
 	Span< u8 > decompressed;
-	bool ok = ReadDemoMetadata( sys_allocator, &playing_demo_metadata, demo ) && DecompressDemo( sys_allocator, &decompressed, demo );
+	bool ok = true;
+	ok = ok && ReadDemoMetadata( sys_allocator, &playing_demo_metadata, demo );
+	ok = ok && DecompressDemo( sys_allocator, playing_demo_metadata, &decompressed, demo );
 	if( !ok ) {
 		Com_Printf( S_COLOR_YELLOW "Demo is corrupt\n" );
+		FreeDemoMetadata();
 		return;
 	}
 
@@ -217,7 +225,6 @@ static void CL_StartDemo( const char * demoname, bool yolo ) {
 	playing_demo_seek = false;
 	playing_demo_seek_latch = false;
 	yolodemo = yolo;
-
 
 	CL_SetClientState( CA_HANDSHAKE );
 }

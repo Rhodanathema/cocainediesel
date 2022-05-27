@@ -665,6 +665,10 @@ static void PackDecalAtlas() {
 		num_mipmaps = Min2( texture->num_mipmaps, num_mipmaps );
 	}
 
+	if( num_decals == 0 ) {
+		num_mipmaps = 1;
+	}
+
 	// rect packing
 	u32 num_unpacked = num_decals;
 	u32 num_layers = 0;
@@ -676,11 +680,9 @@ static void PackDecalAtlas() {
 		stbrp_init_target( &packer, DECAL_ATLAS_SIZE, DECAL_ATLAS_SIZE, nodes, ARRAY_COUNT( nodes ) );
 		stbrp_setup_allow_out_of_mem( &packer, 1 );
 
-		bool all_packed = stbrp_pack_rects( &packer, rects, num_unpacked ) != 0;
+		bool all_packed = stbrp_pack_rects( &packer, rects, num_unpacked ) == 1;
 		bool none_packed = true;
 
-		static RGBA8 pixels[ DECAL_ATLAS_SIZE * DECAL_ATLAS_SIZE ];
-		Span2D< RGBA8 > image( pixels, DECAL_ATLAS_SIZE, DECAL_ATLAS_SIZE );
 		for( u32 i = 0; i < num_unpacked; i++ ) {
 			if( !rects[ i ].was_packed )
 				continue;
@@ -1084,7 +1086,12 @@ PipelineState MaterialToPipelineState( const Material * material, Vec4 color, bo
 	}
 
 	PipelineState pipeline;
-	pipeline.pass = material->blend_func == BlendFunc_Disabled ? frame_static.nonworld_opaque_pass : frame_static.transparent_pass;
+	if( material->blend_func == BlendFunc_Disabled ) {
+		pipeline.pass = material->outlined ? frame_static.nonworld_opaque_outlined_pass : frame_static.nonworld_opaque_pass;
+	}
+	else {
+		pipeline.pass = frame_static.transparent_pass;
+	}
 	pipeline.cull_face = material->double_sided ? CullFace_Disabled : CullFace_Back;
 	pipeline.blend_func = material->blend_func;
 

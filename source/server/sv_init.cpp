@@ -45,11 +45,6 @@ static void SV_CreateBaseline() {
 	}
 }
 
-void SV_SetServerConfigStrings() {
-	snprintf( sv.configstrings[CS_MAXCLIENTS], sizeof( sv.configstrings[CS_MAXCLIENTS] ), "%i", sv_maxclients->integer );
-	Q_strncpyz( sv.configstrings[CS_HOSTNAME], Cvar_String( "sv_hostname" ), sizeof( sv.configstrings[CS_HOSTNAME] ) );
-}
-
 /*
 * SV_SpawnServer
 * Change the server to a new map, taking all connected clients along with it.
@@ -72,8 +67,6 @@ static void SV_SpawnServer( const char *mapname, bool devmap ) {
 	SV_ResetClientFrameCounters();
 	svs.realtime = Sys_Milliseconds();
 	svs.gametime = 0;
-
-	SV_SetServerConfigStrings();
 
 	sv.nextSnapTime = 1000;
 
@@ -139,12 +132,10 @@ void SV_InitGame() {
 	svs.client_entities.entities = ALLOC_MANY( sys_allocator, SyncEntityState, svs.client_entities.num_entities );
 	memset( svs.client_entities.entities, 0, sizeof( svs.client_entities.entities[ 0 ] ) * svs.client_entities.num_entities );
 
-	if( is_dedicated_server || sv_maxclients->integer > 1 ) {
-		svs.socket = NewUDPServer( sv_port->integer, NonBlocking_Yes );
-	}
+	svs.socket = NewUDPServer( sv_port->integer, NonBlocking_Yes );
 
 	// init game
-	SV_InitGameProgs();
+	G_Init( svc.snapFrameTime );
 	for( int i = 0; i < sv_maxclients->integer; i++ ) {
 		edict_t * ent = EDICT_NUM( i + 1 );
 		ent->s.number = i + 1;
@@ -198,7 +189,7 @@ void SV_ShutdownGame( const char *finalmsg, bool reconnect ) {
 
 	SV_FinalMessage( finalmsg, reconnect );
 
-	SV_ShutdownGameProgs();
+	G_Shutdown();
 
 	CloseSocket( svs.socket );
 

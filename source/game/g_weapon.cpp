@@ -31,7 +31,7 @@ static bool CanHit( const edict_t * projectile, const edict_t * target ) {
 		return false;
 
 	constexpr s64 projectile_ignore_teammates_time = 50;
-	if( projectile->s.team != TEAM_PLAYERS && projectile->s.team == target->s.team && level.time - projectile->timeStamp < projectile_ignore_teammates_time )
+	if( projectile->s.team != Team_None && projectile->s.team == target->s.team && level.time - projectile->timeStamp < projectile_ignore_teammates_time )
 		return false;
 
 	return true;
@@ -930,7 +930,7 @@ static void TouchThrowingAxe( edict_t * ent, edict_t * other, Plane * plane, int
 	// edict_t * event = G_SpawnEvent( EV_AXE_IMPACT, DirToU64( plane ? plane->normal : Vec3( 0.0f )), &ent->s.origin );
 	// event->s.team = ent->s.team;
 
-	G_Damage( other, ent, ent->r.owner, ent->velocity, ent->velocity, ent->s.origin, ent->projectileInfo.maxDamage, ent->projectileInfo.maxKnockback, 0, Weapon_None );
+	G_Damage( other, ent, ent->r.owner, ent->velocity, ent->velocity, ent->s.origin, ent->projectileInfo.maxDamage, ent->projectileInfo.maxKnockback, 0, Gadget_ThrowingAxe );
 	G_FreeEdict( ent );
 }
 
@@ -938,9 +938,9 @@ static void UseThrowingAxe( edict_t * self, Vec3 start, Vec3 angles, int timeDel
 	const GadgetDef * def = GetGadgetDef( Gadget_ThrowingAxe );
 
 	ProjectileStats stats = GadgetProjectileStats( Gadget_ThrowingAxe );
-	float unlerped_cook = Unlerp01( u64( 0 ), charge_time, u64( def->cook_time ) );
-	stats.max_damage = Lerp( def->min_damage, unlerped_cook, def->damage );
-	stats.speed = Lerp( def->min_speed, unlerped_cook, def->speed );
+	float cook_frac = Unlerp01( u64( 0 ), charge_time, u64( def->cook_time ) );
+	stats.max_damage = Lerp( def->min_damage, cook_frac, def->damage );
+	stats.speed = Lerp( def->min_speed, cook_frac, def->speed );
 
 	edict_t * axe = FireProjectile( self, start, angles, timeDelta, stats, TouchThrowingAxe, ET_THROWING_AXE, MASK_SHOT );
 	axe->classname = "throwing axe";
@@ -955,7 +955,7 @@ static void TouchStunGrenade( edict_t * ent, edict_t * other, Plane * plane, int
 		return;
 	}
 
-	G_Damage( other, ent, ent->r.owner, ent->velocity, ent->velocity, ent->s.origin, ent->projectileInfo.maxDamage, ent->projectileInfo.maxKnockback, 0, Weapon_None );
+	G_Damage( other, ent, ent->r.owner, ent->velocity, ent->velocity, ent->s.origin, ent->projectileInfo.maxDamage, ent->projectileInfo.maxKnockback, 0, Gadget_StunGrenade );
 }
 
 static void ExplodeStunGrenade( edict_t * grenade ) {
