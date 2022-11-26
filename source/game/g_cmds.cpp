@@ -151,6 +151,8 @@ static void Cmd_Position_f( edict_t * ent, msg_t args ) {
 		}
 		else {
 			G_PrintMsg( ent, "Position set.\n" );
+		} else {
+			G_PrintMsg( ent, "Position not available.\n" );
 		}
 	}
 	else {
@@ -328,9 +330,11 @@ static const g_vsays_t g_vsays[] = {
 	{ "boomstick", Vsay_BoomStick },
 	{ "acne", Vsay_Acne },
 	{ "valley", Vsay_Valley },
+	{ "fam", Vsay_Fam },
 	{ "mike", Vsay_Mike },
 	{ "user", Vsay_User },
 	{ "guyman", Vsay_Guyman },
+	{ "dodonga", Vsay_Dodonga },
 	{ "helena", Vsay_Helena },
 	{ "fart", Vsay_Fart },
 	{ "zombie", Vsay_Zombie },

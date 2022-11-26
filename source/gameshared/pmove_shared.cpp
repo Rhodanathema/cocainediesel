@@ -14,7 +14,7 @@ float Normalize2D( Vec3 * v ) {
 // nbTestDir is the number of directions to test around the player
 // maxZnormal is the max Z value of the normal of a poly to consider it a wall
 // normal becomes a pointer to the normal of the most appropriate wall
-void PlayerTouchWall( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_gs, int nbTestDir, float maxZnormal, Vec3 * normal ) {
+void PlayerTouchWall( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_gs, int nbTestDir, float maxZnormal, Vec3 * normal, bool z ) {
 	TracyZoneScoped;
 
 	float dist = 1.0;
@@ -28,7 +28,7 @@ void PlayerTouchWall( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_gs, in
 		Vec3 dir = Vec3(
 			pm->maxs.x * cosf( PI * 2.0f * t ) + pml->velocity.x * 0.015f,
 			pm->maxs.y * sinf( PI * 2.0f * t ) + pml->velocity.y * 0.015f,
-			0.0f
+			z ? pm->maxs.z * cosf( PI * 2.0f * t ) + pml->velocity.z * 0.015f : 0.0f
 		);
 		Vec3 end = pml->origin + dir;
 
@@ -77,12 +77,6 @@ void StaminaRecover( SyncPlayerState * ps, pml_t * pml, float recover ) {
 	ps->pmove.stamina = Min2( ps->pmove.stamina + recover * pml->frametime, 1.0f );
 }
 
-
-float JumpVelocity( pmove_t * pm, float vel ) {
-	return ( pm->waterlevel >= 2 ? 2 : 1 ) * vel;
-}
-
-
 void PM_InitPerk( pmove_t * pm, pml_t * pml, PerkType perk,
 				void (*ability1Callback)( pmove_t *, pml_t *, const gs_state_t *, SyncPlayerState *, bool pressed ),
 				void (*ability2Callback)( pmove_t *, pml_t *, const gs_state_t *, SyncPlayerState *, bool pressed ) )
@@ -103,7 +97,11 @@ void PM_InitPerk( pmove_t * pm, pml_t * pml, PerkType perk,
 }
 
 
-void Jump( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_gs, SyncPlayerState * ps, float jumpspeed, JumpType j, bool addvel ) {
+void Jump( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_gs, SyncPlayerState * ps, float jumpspeed, bool addvel ) {
+	if( pml->ladder ) {
+		return;
+	}
+
 	pm->groundentity = -1;
 
 	// clip against the ground when jumping if moving that direction
@@ -111,8 +109,8 @@ void Jump( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_gs, SyncPlayerSta
 		pml->velocity = GS_ClipVelocity( pml->velocity, pml->groundplane.normal, PM_OVERBOUNCE );
 	}
 
-	pmove_gs->api.PredictedEvent( ps->POVnum, EV_JUMP, j );
-	pml->velocity.z = (addvel ? Max2( 0.0f, pml->velocity.z ) : 0.0f) + JumpVelocity( pm, jumpspeed );
+	pmove_gs->api.PredictedEvent( ps->POVnum, EV_JUMP, JumpType_Normal );
+	pml->velocity.z = (addvel ? Max2( 0.0f, pml->velocity.z ) : 0.0f) + jumpspeed;
 }
 
 
@@ -126,13 +124,13 @@ void Dash( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_gs, Vec3 dashdir,
 
 	dashdir.z = 0.0f;
 	if( Length( dashdir ) == 0.0f ) {
-		Jump( pm, pml, pmove_gs, pm->playerState, dash_upspeed, JumpType_Normal, true );
+		Jump( pm, pml, pmove_gs, pm->playerState, dash_upspeed, true );
 		return;
 	}
 
 	dashdir = Normalize( dashdir );
 
-	float upspeed = Max2( 0.0f, pml->velocity.z ) + JumpVelocity( pm, dash_upspeed );
+	float upspeed = Max2( 0.0f, pml->velocity.z ) + dash_upspeed;
 	float actual_velocity = Normalize2D( &pml->velocity );
 	if( actual_velocity <= dash_speed ) {
 		dashdir *= dash_speed;

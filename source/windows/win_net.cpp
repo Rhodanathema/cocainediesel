@@ -33,6 +33,8 @@ static SOCKET HandleToOSSocket( u64 handle ) {
 }
 
 void InitNetworking() {
+	TracyZoneScoped;
+
 	WSADATA wsa_data;
 	if( WSAStartup( MAKEWORD( 2, 2 ), &wsa_data ) != 0 ) {
 		FatalWSA( "WSAStartup" );
@@ -100,7 +102,7 @@ bool OSSocketSend( u64 handle, const void * data, size_t n, const sockaddr_stora
 			*sent = 0;
 			return true;
 		}
-		if( error == WSAECONNABORTED || error == WSAECONNRESET ) {
+		if( error == WSAENETUNREACH || error == WSAENETRESET || error == WSAECONNABORTED || error == WSAECONNRESET || error == WSAEHOSTUNREACH ) {
 			return false;
 		}
 		FatalWSA( "sendto" );

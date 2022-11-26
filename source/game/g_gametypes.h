@@ -2,7 +2,7 @@
 
 extern Cvar *g_warmup_timelimit;
 
-struct GametypeSpec {
+struct GametypeDef {
 	void ( *Init )();
 	void ( *MatchStateStarted )();
 	void ( *Think )();
@@ -26,8 +26,16 @@ struct GametypeSpec {
 void InitGametype();
 void ShutdownGametype();
 
-GametypeSpec GetBombGametype();
-GametypeSpec GetGladiatorGametype();
+//
+// gt_utils.cpp
+//
+
+void ShowShop( edict_t * ent, msg_t m );
+void GiveInventory( edict_t * ent );
+void SetLoadout( edict_t * ent, const char * loadout_string, bool fallback_to_default );
+
+GametypeDef GetBombGametype();
+GametypeDef GetGladiatorGametype();
 
 void G_Match_LaunchState( MatchState matchState );
 

@@ -49,6 +49,10 @@ void CG_PredictedFireWeapon( int entNum, u64 parm ) {
 	CG_PredictedEvent( entNum, EV_FIREWEAPON, parm );
 }
 
+void CG_PredictedAltFireWeapon( int entNum, u64 parm ) {
+	CG_PredictedEvent( entNum, EV_ALTFIREWEAPON, parm );
+}
+
 void CG_PredictedUseGadget( int entNum, GadgetType gadget, u64 parm ) {
 }
 
@@ -263,24 +267,6 @@ void CG_Trace( trace_t *t, Vec3 start, Vec3 mins, Vec3 maxs, Vec3 end, int ignor
 	CG_ClipMoveToEntities( start, mins, maxs, end, ignore, contentmask, t );
 }
 
-int CG_PointContents( Vec3 point ) {
-	TracyZoneScoped;
-
-	int contents = CM_TransformedPointContents( CM_Client, cl.map->cms, point, NULL, Vec3( 0.0f ), Vec3( 0.0f ) );
-
-	for( int i = 0; i < cg_numSolids; i++ ) {
-		const SyncEntityState * ent = cg_solidList[i];
-
-		cmodel_t * cmodel = CM_TryFindCModel( CM_Client, ent->model );
-		if( cmodel != NULL ) {
-			contents |= CM_TransformedPointContents( CM_Client, cl.map->cms, point, cmodel, ent->origin, ent->angles );
-		}
-	}
-
-	return contents;
-}
-
-
 static float predictedSteps[CMD_BACKUP]; // for step smoothing
 static void CG_PredictAddStep( int virtualtime, int predictiontime, float stepSize ) {
 
@@ -311,16 +297,10 @@ static void CG_PredictSmoothSteps() {
 
 	CL_GetCurrentState( NULL, &outgoing, NULL );
 
-	i = outgoing;
-	while( predictiontime < PREDICTED_STEP_TIME ) {
-		if( outgoing - i >= CMD_BACKUP ) {
-			break;
-		}
-
+	for( i = outgoing; (outgoing - i) < CMD_BACKUP && predictiontime < PREDICTED_STEP_TIME; i-- ) {
 		frame = i & CMD_MASK;
 		CL_GetUserCmd( frame, &cmd );
 		predictiontime += cmd.msec;
-		i--;
 	}
 
 	// run frames

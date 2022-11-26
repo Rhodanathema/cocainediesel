@@ -26,9 +26,9 @@ cg_state_t cg;
 centity_t cg_entities[MAX_EDICTS];
 
 Cvar *cg_showMiss;
+Cvar *cg_mask;
 
 Cvar *cg_thirdPerson;
-Cvar *cg_thirdPersonAngle;
 Cvar *cg_thirdPersonRange;
 
 Cvar *cg_projectileAntilagOffset;
@@ -55,11 +55,6 @@ static void CG_GS_Trace( trace_t *t, Vec3 start, Vec3 mins, Vec3 maxs, Vec3 end,
 	CG_Trace( t, start, mins, maxs, end, ignore, contentmask );
 }
 
-static int CG_GS_PointContents( Vec3 point, int timeDelta ) {
-	assert( !timeDelta );
-	return CG_PointContents( point );
-}
-
 static SyncEntityState *CG_GS_GetEntityState( int entNum, int deltaTime ) {
 	centity_t *cent;
 
@@ -83,19 +78,19 @@ static void CG_InitGameShared( int max_clients ) {
 
 	client_gs.api.PredictedEvent = CG_PredictedEvent;
 	client_gs.api.PredictedFireWeapon = CG_PredictedFireWeapon;
+	client_gs.api.PredictedAltFireWeapon = CG_PredictedAltFireWeapon;
 	client_gs.api.PredictedUseGadget = CG_PredictedUseGadget;
 	client_gs.api.Trace = CG_GS_Trace;
 	client_gs.api.GetEntityState = CG_GS_GetEntityState;
-	client_gs.api.PointContents = CG_GS_PointContents;
 	client_gs.api.PMoveTouchTriggers = CG_Predict_TouchTriggers;
 }
 
 static void CG_RegisterVariables() {
 	cg_showMiss = NewCvar( "cg_showMiss", "0", 0 );
+	cg_mask = NewCvar( "cg_mask", "", CvarFlag_Archive | CvarFlag_UserInfo );
 
-	cg_thirdPerson = NewCvar( "cg_thirdPerson", "0", CvarFlag_Cheat );
-	cg_thirdPersonAngle = NewCvar( "cg_thirdPersonAngle", "0", 0 );
-	cg_thirdPersonRange = NewCvar( "cg_thirdPersonRange", "90", 0 );
+	cg_thirdPerson = NewCvar( "cg_thirdPerson", "0", CvarFlag_Developer );
+	cg_thirdPersonRange = NewCvar( "cg_thirdPersonRange", "90", CvarFlag_Developer );
 
 	cg_projectileAntilagOffset = NewCvar( "cg_projectileAntilagOffset", "1.0", CvarFlag_Archive );
 
@@ -148,6 +143,8 @@ void CG_Init( unsigned int playerNum, int max_clients,
 	memset( &cgs, 0, sizeof( cg_static_t ) );
 
 	memset( cg_entities, 0, sizeof( cg_entities ) );
+
+	MaybeResetShadertoyTime( true );
 
 	CG_InitGameShared( max_clients );
 

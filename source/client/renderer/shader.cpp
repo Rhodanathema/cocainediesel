@@ -1,6 +1,6 @@
 #include "qcommon/base.h"
-#include "qcommon/qcommon.h"
 #include "qcommon/array.h"
+#include "qcommon/string.h"
 #include "client/client.h"
 #include "client/assets.h"
 #include "client/renderer/renderer.h"
@@ -25,15 +25,11 @@ static const char * FindInclude( Span< const char > str ) {
 	return NULL;
 }
 
-static Span< Span< const char > > BuildShaderSrcs( TempAllocator * temp, const char * path, const char * defines ) {
+static void BuildShaderSrcs( DynamicString * src, const char * path, const char * defines ) {
 	TracyZoneScoped;
 	TracyZoneText( path, strlen( path ) );
 
-	NonRAIIDynamicArray< Span< const char > > srcs( temp );
-
-	if( defines != NULL ) {
-		srcs.add( MakeSpan( defines ) );
-	}
+	src->append( "{}", defines );
 
 	Span< const char > glsl = AssetString( path );
 	if( glsl.ptr == NULL ) {
@@ -42,8 +38,6 @@ static Span< Span< const char > > BuildShaderSrcs( TempAllocator * temp, const c
 
 	Span< const char > cursor = glsl;
 
-	srcs.add( MakeSpan( "#line 1\n" ) );
-
 	while( true ) {
 		const char * before_include = FindInclude( cursor );
 		if( before_include == NULL )
@@ -51,7 +45,7 @@ static Span< Span< const char > > BuildShaderSrcs( TempAllocator * temp, const c
 
 		size_t length_to_include = before_include - cursor.ptr;
 		if( length_to_include > 0 ) {
-			srcs.add( cursor.slice( 0, length_to_include ) );
+			src->append( "{}", cursor.slice( 0, length_to_include ) );
 		}
 
 		cursor += length_to_include + strlen( "#include" );
@@ -64,40 +58,38 @@ static Span< Span< const char > > BuildShaderSrcs( TempAllocator * temp, const c
 			// TODO
 		}
 
-		srcs.add( MakeSpan( "#line 1\n" ) );
-		srcs.add( contents );
-		srcs.add( MakeSpan( "#line 1\n" ) );
+		src->append( "{}", contents );
 	}
 
 	if( cursor.n > 0 ) {
-		srcs.add( cursor );
+		src->append( "{}", cursor );
 	}
-
-	return srcs.span();
 }
 
-static void LoadShader( Shader * shader, const char * path, const char * defines = NULL, bool particle_vertex_attribs = false ) {
+static void LoadShader( Shader * shader, const char * path, const char * defines = "" ) {
 	TracyZoneScoped;
 
 	TempAllocator temp = cls.frame_arena.temp();
-	Span< Span< const char > > srcs = BuildShaderSrcs( &temp, path, defines );
+	DynamicString src( &temp );
+	BuildShaderSrcs( &src, path, defines );
 
 	Shader new_shader;
-	if( !NewShader( &new_shader, srcs, particle_vertex_attribs ) )
+	if( !NewShader( &new_shader, src.c_str(), path ) )
 		return;
 
 	DeleteShader( *shader );
 	*shader = new_shader;
 }
 
-static void LoadComputeShader( Shader * shader, const char * path, const char * defines = NULL ) {
+static void LoadComputeShader( Shader * shader, const char * path, const char * defines = "" ) {
 	TracyZoneScoped;
 
 	TempAllocator temp = cls.frame_arena.temp();
-	Span< Span< const char > > srcs = BuildShaderSrcs( &temp, path, defines );
+	DynamicString src( &temp );
+	BuildShaderSrcs( &src, path, defines );
 
 	Shader new_shader;
-	if( !NewComputeShader( &new_shader, srcs ) )
+	if( !NewComputeShader( &new_shader, src.c_str(), path ) )
 		return;
 
 	DeleteShader( *shader );
@@ -176,10 +168,10 @@ static void LoadShaders() {
 	LoadShader( &shaders.blur, "glsl/blur.glsl" );
 	LoadShader( &shaders.postprocess, "glsl/postprocess.glsl" );
 
-	LoadComputeShader( &shaders.particle_compute, "glsl/particle_compute.glsl", NULL );
-	LoadComputeShader( &shaders.particle_setup_indirect, "glsl/particle_setup_indirect.glsl", NULL );
-	LoadShader( &shaders.particle, "glsl/particle.glsl", NULL, true );
-	LoadShader( &shaders.particle_model, "glsl/particle.glsl", "#define MODEL 1\n", true );
+	LoadComputeShader( &shaders.particle_compute, "glsl/particle_compute.glsl" );
+	LoadComputeShader( &shaders.particle_setup_indirect, "glsl/particle_setup_indirect.glsl" );
+	LoadShader( &shaders.particle, "glsl/particle.glsl" );
+	LoadShader( &shaders.particle_model, "glsl/particle.glsl", "#define MODEL 1\n" );
 
 	const char * culling_defines = temp( "#define TILE_SIZE {}\n", TILE_SIZE );
 	LoadComputeShader( &shaders.tile_culling, "glsl/tile_culling.glsl", culling_defines );

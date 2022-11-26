@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "client/renderer/renderer.h"
 #include "cgame/cg_local.h"
 #include "qcommon/cmodel.h"
+#include "qcommon/time.h"
 
 static Cvar *scr_netgraph;
 static Cvar *scr_timegraph;
@@ -165,9 +166,9 @@ static void SubmitPostprocessPass() {
 	float damage_effect = cg.view.type == VIEWDEF_PLAYERVIEW ? cg.damage_effect : 0.0f;
 
 	float contrast = 1.0f;
-	if( client_gs.gameState.bomb.exploding ) {
+	if( client_gs.gameState.exploding ) {
 		constexpr float duration = 4000.0f;
-		float t = ( cl.serverTime - client_gs.gameState.bomb.exploded_at ) / duration;
+		float t = ( cl.serverTime - client_gs.gameState.exploded_at ) / duration;
 
 		FlashStage( 0.00f, t, 0.05f, 1.0f, -1.0f, &contrast );
 		FlashStage( 0.05f, t, 0.10f, -1.0f, 1.0f, &contrast );
@@ -188,7 +189,7 @@ static void SubmitPostprocessPass() {
 	chasing_amount = Clamp01( chasing_amount );
 
 	PostprocessUniforms uniforms = { };
-	uniforms.time = float( Sys_Milliseconds() ) * 0.001f;
+	uniforms.time = ToSeconds( cls.shadertoy_time );
 	uniforms.damage = damage_effect;
 	uniforms.crt = chasing_amount;
 	uniforms.brightness = 0.0f;

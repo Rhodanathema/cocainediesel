@@ -219,8 +219,7 @@ static void G_VoteSpectatePassed( callvotedata_t *vote ) {
 		return;
 	}
 
-	G_PrintMsg( NULL, "Player %s%s moved to spectators %s%s.\n", ent->r.client->netname, S_COLOR_WHITE,
-				GS_TeamName( ent->s.team ), S_COLOR_WHITE );
+	G_PrintMsg( NULL, "%s moved to spectator.\n", ent->r.client->netname );
 
 	G_Teams_SetTeam( ent, Team_None );
 }
@@ -612,7 +611,7 @@ static void G_CallVote( edict_t * ent, Span< Span< const char > > tokens ) {
 		return;
 	}
 
-	if( ent->r.client->level.callvote_when && ( ent->r.client->level.callvote_when + callvoteCooldown > svs.realtime ) ) {
+	if( ent->r.client->level.callvote_when && ent->r.client->level.callvote_when + callvoteCooldown > svs.realtime ) {
 		G_PrintMsg( ent, "%sYou can not call a vote right now\n", S_COLOR_RED );
 		return;
 	}

@@ -2,27 +2,35 @@
 #include "gameshared/gs_weapons.h"
 
 
-static constexpr float pm_jetpackspeed = 25.0f * 62.0f;
 static constexpr float pm_jumpspeed = 220.0f;
-static constexpr float pm_maxjetpackupspeed = 150.0f;
+static constexpr float jump_detection = 0.06f; //slight jump buffering
+
+static constexpr float pm_jetpackspeed = 25.0f * 62.0f;
+static constexpr float pm_maxjetpackupspeed = 82.0f;
 static constexpr float pm_maxjetpackupspeedslowdown = 0.75f;
 
-static constexpr float pm_boostspeed = 5.0f * 62.0f;
-static constexpr float pm_boostupspeed = 18.0f * 62.0f;
+static constexpr float pm_boostspeed = 7.45f * 62.0f;
+static constexpr float pm_boostupspeed = 15.0f * 62.0f;
 
-static constexpr float fuel_use_jetpack = 0.125f;
-static constexpr float fuel_use_boost = 0.5f;
+static constexpr float fuel_use_jetpack = 0.2f;
+static constexpr float fuel_use_boost = 0.6f;
 static constexpr float fuel_min = 0.01f;
 
-static constexpr float refuel_min = 0.5f; //50%
-static constexpr float refuel_ground = 0.5f;
+static constexpr float refuel_min = 1.0f; //50%
+static constexpr float refuel_ground = 0.75f;
 static constexpr float refuel_air = 0.0f;
 
 
 static void PM_JetpackJump( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_gs, SyncPlayerState * ps, bool pressed ) {
 	if( pressed ) {
-		if( pm->groundentity != -1 && !(ps->pmove.pm_flags & PMF_ABILITY1_HELD) ) {
-			Jump( pm, pml, pmove_gs, ps, pm_jumpspeed, JumpType_Normal, true );
+		ps->pmove.jump_buffering = Max2( 0.0f, ps->pmove.jump_buffering - pml->frametime );
+
+		if( !(ps->pmove.pm_flags & PMF_ABILITY1_HELD) ) {
+			ps->pmove.jump_buffering = jump_detection;
+		}
+
+		if( pm->groundentity != -1 && ps->pmove.jump_buffering != 0.0f ) {
+			Jump( pm, pml, pmove_gs, ps, pm_jumpspeed, true );
 		}
 
 		ps->pmove.pm_flags |= PMF_ABILITY1_HELD;
@@ -35,7 +43,7 @@ static void PM_JetpackJump( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_
 			} else {
 				pml->velocity.z += GRAVITY * pm_maxjetpackupspeedslowdown * pml->frametime;
 			}
-			
+
 			pm->groundentity = -1;
 			pmove_gs->api.PredictedEvent( ps->POVnum, EV_JETPACK, 0 );
 		}
@@ -47,7 +55,7 @@ static void PM_JetpackJump( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_
 		ps->pmove.stamina_state = Stamina_UsedAbility;
 	}
 
-	if( ( pm->groundentity != -1 || pm->waterlevel >= 2 ) ) {
+	if( ( pm->groundentity != -1 || pml->ladder ) ) {
 		if( ps->pmove.stamina_state == Stamina_UsedAbility ) {
 			ps->pmove.stamina_state = Stamina_Reloading;
 		} else if( ps->pmove.stamina_state == Stamina_UsingAbility ) {
@@ -59,7 +67,7 @@ static void PM_JetpackJump( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_
 
 
 static void PM_JetpackSpecial( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_gs, SyncPlayerState * ps, bool pressed ) {
-	if( ps->pmove.stamina_state == Stamina_Normal || ps->pmove.stamina_state == Stamina_Reloading ) {
+	if( (ps->pmove.stamina_state == Stamina_Normal || ps->pmove.stamina_state == Stamina_Reloading) && !(ps->pmove.pm_flags & PMF_ABILITY2_HELD) ) {
 		StaminaRecover( ps, pml, refuel_ground );
 		if( ps->pmove.stamina >= refuel_min ) {
 			ps->pmove.stamina_state = Stamina_Normal;

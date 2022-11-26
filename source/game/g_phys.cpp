@@ -395,19 +395,6 @@ static void SV_Physics_Toss( edict_t *ent ) {
 		}
 	}
 
-	Vec3 old_origin = ent->s.origin;
-
-	if( ent->accel != 0 ) {
-		if( ent->accel < 0 && Length( ent->velocity ) < 50 ) {
-			ent->velocity = Vec3( 0.0f );
-		} else {
-			Vec3 acceldir;
-			acceldir = Normalize( ent->velocity );
-			acceldir = acceldir * ent->accel * FRAMETIME;
-			ent->velocity = ent->velocity + acceldir;
-		}
-	}
-
 	SV_CheckVelocity( ent );
 
 	// add gravity
@@ -480,20 +467,6 @@ static void SV_Physics_Toss( edict_t *ent ) {
 		ent->s.angles += ent->avelocity * FRAMETIME;
 	}
 
-	// check for water transition
-	bool wasinwater = ent->watertype & MASK_WATER;
-	ent->watertype = G_PointContents( ent->s.origin );
-	bool isinwater = ent->watertype & MASK_WATER;
-
-	ent->waterlevel = isinwater;
-
-
-	if( !wasinwater && isinwater ) {
-		G_PositionedSound( old_origin, "sounds/misc/hit_water" );
-	} else if( wasinwater && !isinwater ) {
-		G_PositionedSound( ent->s.origin, "sounds/misc/hit_water" );
-	}
-
 	GClip_LinkEntity( ent );
 }
 
@@ -505,9 +478,6 @@ static void SV_Physics_LinearProjectile( edict_t *ent ) {
 	Vec3 start, end;
 	int mask;
 	trace_t trace;
-	bool wasinwater;
-
-	wasinwater = ent->waterlevel;
 
 	mask = ( ent->r.clipmask ) ? ent->r.clipmask : MASK_SOLID;
 
@@ -525,13 +495,6 @@ static void SV_Physics_LinearProjectile( edict_t *ent ) {
 
 	GClip_TouchTriggers( ent );
 	ent->groundentity = NULL; // projectiles never have ground entity
-	ent->waterlevel = G_PointContents( ent->s.origin ) & MASK_WATER;
-
-	if( !wasinwater && ent->waterlevel ) {
-		G_PositionedSound( start, "sounds/misc/hit_water" );
-	} else if( wasinwater && !ent->waterlevel ) {
-		G_PositionedSound( ent->s.origin, "sounds/misc/hit_water" );
-	}
 
 	ent->s.angles += ent->avelocity * FRAMETIME;
 }

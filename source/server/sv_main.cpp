@@ -32,8 +32,6 @@ Cvar *sv_downloadurl;
 Cvar *sv_timeout;            // seconds without any message
 Cvar *sv_zombietime;         // seconds to sink messages after disconnect
 
-Cvar *rcon_password;         // password for remote server commands
-
 Cvar *sv_maxclients;
 
 Cvar *sv_showChallenge;
@@ -403,13 +401,13 @@ void SV_Init() {
 
 	SV_InitOperatorCommands();
 
-	NewCvar( "protocol", temp( "{}", APP_PROTOCOL_VERSION ), CvarFlag_ServerInfo | CvarFlag_ReadOnly );
+	NewCvar( "protocol", temp( "{}", s32( APP_PROTOCOL_VERSION ) ), CvarFlag_ServerInfo | CvarFlag_ReadOnly );
+	NewCvar( "serverid", temp( "{}", Random64( &svs.rng ) ), CvarFlag_ServerInfo | CvarFlag_ReadOnly );
 
 	sv_port = NewCvar( "sv_port", temp( "{}", PORT_SERVER ), CvarFlag_Archive | CvarFlag_ServerReadOnly );
 
 	sv_downloadurl = NewCvar( "sv_downloadurl", "", CvarFlag_Archive | CvarFlag_ServerReadOnly );
 
-	rcon_password = NewCvar( "rcon_password", "", 0 );
 	sv_hostname = NewCvar( "sv_hostname", APPLICATION " server", CvarFlag_ServerInfo | CvarFlag_Archive );
 	sv_timeout = NewCvar( "sv_timeout", "15", 0 );
 	sv_zombietime = NewCvar( "sv_zombietime", "2", 0 );

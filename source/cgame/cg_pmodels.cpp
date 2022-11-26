@@ -89,8 +89,12 @@ static bool ParsePlayerModelConfig( PlayerModelMetadata * meta, const char * fil
 				PlayerModelMetadata::Tag * tag = &meta->tag_bomb;
 				if( tag_name == "tag_hat" )
 					tag = &meta->tag_hat;
+				else if( tag_name == "tag_mask" )
+					tag = &meta->tag_mask;
 				else if( tag_name == "tag_weapon" )
 					tag = &meta->tag_weapon;
+				else if( tag_name == "tag_gadget" )
+					tag = &meta->tag_gadget;
 
 				float forward = ParseFloat( &cursor, 0.0f, Parse_StopOnNewLine );
 				float right = ParseFloat( &cursor, 0.0f, Parse_StopOnNewLine );
@@ -147,6 +151,7 @@ static bool ParsePlayerModelConfig( PlayerModelMetadata * meta, const char * fil
 static constexpr const char * PLAYER_SOUND_NAMES[] = {
 	"death",
 	"void_death",
+	"smackdown",
 	"jump",
 	"pain25", "pain50", "pain75", "pain100",
 	"walljump",
@@ -278,15 +283,12 @@ static float CG_OutlineScaleForDist( const InterpolatedEntity * e, float maxdist
 #define ANIMMOVE_WALK       ( 1 << 4 )  // Player is pressing the walk key
 #define ANIMMOVE_RUN        ( 1 << 5 )  // Player is running
 #define ANIMMOVE_DUCK       ( 1 << 6 )  // Player is crouching
-#define ANIMMOVE_SWIM       ( 1 << 7 )  // Player is swimming
-#define ANIMMOVE_AIR        ( 1 << 8 )  // Player is at air, but not jumping
-#define ANIMMOVE_DEAD       ( 1 << 9 )  // Player is a corpse
+#define ANIMMOVE_AIR        ( 1 << 7 )  // Player is at air, but not jumping
+#define ANIMMOVE_DEAD       ( 1 << 8 )  // Player is a corpse
 
 static int CG_MoveFlagsToUpperAnimation( uint32_t moveflags, int carried_weapon ) {
 	if( moveflags & ANIMMOVE_DEAD )
 		return ANIM_NONE;
-	if( moveflags & ANIMMOVE_SWIM )
-		return TORSO_SWIM;
 
 	switch( carried_weapon ) {
 		case Weapon_Knife:
@@ -315,9 +317,6 @@ static int CG_MoveFlagsToUpperAnimation( uint32_t moveflags, int carried_weapon 
 static int CG_MoveFlagsToLowerAnimation( uint32_t moveflags ) {
 	if( moveflags & ANIMMOVE_DEAD )
 		return ANIM_NONE;
-
-	if( moveflags & ANIMMOVE_SWIM )
-		return ( moveflags & ANIMMOVE_FRONT ) ? LEGS_SWIM_FORWARD : LEGS_SWIM_NEUTRAL;
 
 	if( moveflags & ANIMMOVE_DUCK ) {
 		if( moveflags & ( ANIMMOVE_WALK | ANIMMOVE_RUN ) )
@@ -390,12 +389,6 @@ static PlayerModelAnimationSet CG_GetBaseAnims( SyncEntityState *state, Vec3 vel
 	// if( maxs != playerbox_stand_maxs ) {
 	// 	moveflags |= ANIMMOVE_DUCK;
 	// }
-
-	// find out the water level
-	int waterlevel = GS_WaterLevel( &client_gs, state, mins, maxs );
-	if( waterlevel >= 2 || ( waterlevel && ( moveflags & ANIMMOVE_AIR ) ) ) {
-		moveflags |= ANIMMOVE_SWIM;
-	}
 
 	//find out what are the base movements the model is doing
 
@@ -805,10 +798,17 @@ void CG_DrawPlayer( centity_t * cent ) {
 
 	// add weapon model
 	{
-		if( cent->current.weapon != Weapon_None ) {
-			const Model * weapon_model = GetWeaponModelMetadata( cent->current.weapon )->model;
-			if( weapon_model != NULL ) {
-				Mat4 tag_transform = TransformTag( weapon_model, transform, pose, meta->tag_weapon ) * inverse_scale;
+		if( cent->current.weapon != Weapon_None || cent->current.gadget != Gadget_None ) {
+			const Model * model;
+			bool gadget = cent->current.gadget != Gadget_None;
+			if( gadget ) {
+				model = GetGadgetModelMetadata( cent->current.gadget )->model;
+			} else {
+				model = GetWeaponModelMetadata( cent->current.weapon )->model;
+			}
+
+			if( model != NULL ) {
+				Mat4 tag_transform = TransformTag( model, transform, pose, gadget ? meta->tag_gadget : meta->tag_weapon ) * inverse_scale;
 
 				DrawModelConfig config = { };
 				config.draw_model.enabled = draw_model;
@@ -819,11 +819,11 @@ void CG_DrawPlayer( centity_t * cent ) {
 					config.draw_silhouette.silhouette_color = color;
 				}
 
-				DrawModel( config, weapon_model, tag_transform, color );
+				DrawModel( config, model, tag_transform, color );
 
 				u8 muzzle;
-				if( FindNodeByName( weapon_model, Hash32( "muzzle" ), &muzzle ) ) {
-					pmodel->muzzle_transform = tag_transform * weapon_model->transform * weapon_model->nodes[ muzzle ].global_transform;
+				if( FindNodeByName( model, Hash32( "muzzle" ), &muzzle ) ) {
+					pmodel->muzzle_transform = tag_transform * model->transform * model->nodes[ muzzle ].global_transform;
 				}
 				else {
 					pmodel->muzzle_transform = tag_transform;
@@ -834,8 +834,8 @@ void CG_DrawPlayer( centity_t * cent ) {
 
 	// add bomb/hat
 	{
-		const Model * attached_model = FindModel( cent->current.model2 );
-		if( attached_model != NULL ) {
+		const Model * hat_model = FindModel( cent->current.model2 );
+		if( hat_model != NULL ) {
 			PlayerModelMetadata::Tag tag = meta->tag_bomb;
 			if( cent->current.effects & EF_HAT )
 				tag = meta->tag_hat;
@@ -848,7 +848,22 @@ void CG_DrawPlayer( centity_t * cent ) {
 			config.draw_silhouette.enabled = draw_silhouette;
 			config.draw_silhouette.silhouette_color = color;
 
-			DrawModel( config, attached_model, tag_transform, vec4_white );
+			DrawModel( config, hat_model, tag_transform, vec4_white );
+		}
+
+		const Model * mask_model = FindModel( cent->current.mask );
+		if( mask_model != NULL ) {
+			PlayerModelMetadata::Tag tag = meta->tag_mask;
+
+			Mat4 tag_transform = TransformTag( meta->model, transform, pose, tag );
+
+			DrawModelConfig config = { };
+			config.draw_model.enabled = draw_model;
+			config.draw_shadows.enabled = true;
+			config.draw_silhouette.enabled = draw_silhouette;
+			config.draw_silhouette.silhouette_color = color;
+
+			DrawModel( config, mask_model, tag_transform, vec4_white );
 		}
 	}
 }

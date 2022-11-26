@@ -49,7 +49,7 @@ static Mat4 GetMuzzleTransform( int ent ) {
 	return cg_entPModels[ ent ].muzzle_transform;
 }
 
-static void FireRailgun( Vec3 origin, Vec3 dir, int ownerNum ) {
+static void FireRailgun( Vec3 origin, Vec3 dir, int ownerNum, bool from_origin ) {
 	const WeaponDef * def = GS_GetWeaponDef( Weapon_Railgun );
 
 	float range = def->range;
@@ -65,10 +65,13 @@ static void FireRailgun( Vec3 origin, Vec3 dir, int ownerNum ) {
 		RailgunImpact( trace.endpos, trace.plane.normal, trace.surfFlags, color );
 	}
 
-	Mat4 muzzle_transform = GetMuzzleTransform( ownerNum );
+	if( from_origin ) {
+		PlaySFX( GetWeaponModelMetadata( Weapon_Railgun )->fire_sound, PlaySFXConfigPosition( origin ) );
+	}
 
-	AddPersistentBeam( muzzle_transform.col3.xyz(), trace.endpos, 16.0f, color, "weapons/eb/beam", 0.25f, 0.1f );
-	RailTrailParticles( muzzle_transform.col3.xyz(), trace.endpos, color );
+	Vec3 fx_origin = from_origin ? origin : GetMuzzleTransform( ownerNum ).col3.xyz();
+	AddPersistentBeam( fx_origin, trace.endpos, 16.0f, color, "weapons/eb/beam", 0.25f, 0.1f );
+	RailTrailParticles( fx_origin, trace.endpos, color );
 }
 
 void CG_LaserBeamEffect( centity_t * cent ) {
@@ -115,7 +118,7 @@ void CG_LaserBeamEffect( centity_t * cent ) {
 		centity_t * cent = ( centity_t * ) data;
 
 		Vec4 color = CG_TeamColorVec4( cent->current.team );
-		DrawDynamicLight( trace->endpos, color, 10000.0f );
+		DrawDynamicLight( trace->endpos, color.xyz(), 10000.0f );
 		DoVisualEffect( "weapons/lg/tip_hit", trace->endpos, trace->plane.normal, 1.0f, color );
 
 		cent->lg_tip_sound = PlayImmediateSFX( "weapons/lg/tip_hit", cent->lg_tip_sound, PlaySFXConfigPosition( trace->endpos ) );
@@ -366,7 +369,7 @@ static void CG_StartVsay( int entNum, u64 parm ) {
 	u32 vsay = parm & 0xffff;
 	u32 entropy = parm >> 16;
 
-	if( vsay >= Vsay_Total ) {
+	if( vsay >= Vsay_Count ) {
 		return;
 	}
 
@@ -383,7 +386,6 @@ static void CG_StartVsay( int entNum, u64 parm ) {
 	StringHash sound = cgs.media.sfxVSaySounds[ vsay ];
 
 	PlaySFXConfig config = PlaySFXConfigGlobal();
-	config.has_entropy = true;
 	config.entropy = entropy;
 	if( client_gs.gameState.match_state >= MatchState_PostMatch ) {
 		PlaySFX( sound, config );
@@ -444,10 +446,10 @@ static void CG_Event_Die( int corpse_ent, u64 parm ) {
 
 	int player_ent = cg_entities[ corpse_ent ].prev.ownerNum;
 
-	bool void_death = ( parm & 1 ) != 0;
-	u64 animation = ( parm >> 1 ) % ARRAY_COUNT( animations );
+	int void_death = ( parm & 0b11 );
+	u64 animation = ( parm >> 2 ) % ARRAY_COUNT( animations );
 
-	CG_PlayerSound( corpse_ent, void_death ? PlayerSound_Void : PlayerSound_Death, false );
+	CG_PlayerSound( corpse_ent, (void_death & 0b1) ? PlayerSound_Void : (void_death & 0b10) ? PlayerSound_Smackdown : PlayerSound_Death, false );
 	CG_PModel_AddAnimation( corpse_ent, animations[ animation ].dead, animations[ animation ].dead, ANIM_NONE, BASE_CHANNEL );
 	CG_PModel_AddAnimation( corpse_ent, animations[ animation ].dying, animations[ animation ].dying, ANIM_NONE, EVENT_CHANNEL );
 
@@ -651,7 +653,7 @@ void CG_EntityEvent( SyncEntityState * ent, int ev, u64 parm, bool predicted ) {
 			AngleVectors( angles, &dir, NULL, NULL );
 
 			if( weapon == Weapon_Railgun ) {
-				FireRailgun( origin, dir, owner );
+				FireRailgun( origin, dir, owner, false );
 			}
 			else if( weapon == Weapon_Shotgun ) {
 				CG_Event_FireShotgun( origin, dir, owner, team_color );
@@ -669,6 +671,9 @@ void CG_EntityEvent( SyncEntityState * ent, int ev, u64 parm, bool predicted ) {
 			// 	cg.predictedPlayerState.pmove.velocity -= dir * GS_GetWeaponDef( Weapon_Minigun )->knockback;
 			// }
 		} break;
+
+		case EV_ALTFIREWEAPON:
+			break;
 
 		case EV_USEGADGET: {
 			GadgetType gadget = GadgetType( parm & 0xFF );
@@ -730,6 +735,9 @@ void CG_EntityEvent( SyncEntityState * ent, int ev, u64 parm, bool predicted ) {
 		case EV_WALLJUMP:
 			CG_Event_WallJump( ent, parm, ev );
 			break;
+		case EV_CHARGEJUMP:
+			CG_PModel_AddAnimation( ent->number, LEGS_STAND_IDLE, 0, 0, EVENT_CHANNEL );
+			break;
 
 		case EV_JETPACK:
 			CG_Event_Jetpack( ent, parm );
@@ -761,6 +769,10 @@ void CG_EntityEvent( SyncEntityState * ent, int ev, u64 parm, bool predicted ) {
 
 		case EV_DIE:
 			CG_Event_Die( ent->ownerNum, parm );
+			break;
+
+		case EV_RESPAWN:
+			MaybeResetShadertoyTime( true );
 			break;
 
 		case EV_BOMB_EXPLOSION:
@@ -821,6 +833,17 @@ void CG_EntityEvent( SyncEntityState * ent, int ev, u64 parm, bool predicted ) {
 			Vec3 normal = U64ToDir( parm );
 			DoVisualEffect( "weapons/sticky/impact", ent->origin, normal, 24, team_color );
 			PlaySFX( "weapons/sticky/impact", PlaySFXConfigPosition( ent->origin ) );
+		} break;
+
+		case EV_RAIL_ALTENT: {
+			DoVisualEffect( "weapons/eb/charge", ent->origin, Vec3( 0.0f ), 1.0f, team_color );
+			PlaySFX( "weapons/eb/charge", PlaySFXConfigPosition( ent->origin ) );
+		} break;
+
+		case EV_RAIL_ALTFIRE: {
+			Vec3 dir;
+			AngleVectors( ent->angles, &dir, NULL, NULL );
+			FireRailgun( ent->origin, dir, ent->ownerNum, true );
 		} break;
 
 		case EV_ROCKET_EXPLOSION: {
@@ -969,6 +992,16 @@ void CG_EntityEvent( SyncEntityState * ent, int ev, u64 parm, bool predicted ) {
 			PlaySFX( "weapons/rl/explode", PlaySFXConfigPosition( ent->origin ) );
 		} break;
 
+		case EV_AXE_HIT:
+			PlaySFX( "gadgets/hatchet/hit", PlaySFXConfigPosition( ent->origin ) );
+			break;
+
+		case EV_AXE_IMPACT: {
+			Vec3 normal = U64ToDir( parm );
+			DoVisualEffect( "gadgets/hatchet/impact", ent->origin, normal, 1.0f, team_color );
+			PlaySFX( "gadgets/hatchet/impact", PlaySFXConfigPosition( ent->origin ) );
+		} break;
+
 		case EV_STUN_GRENADE_EXPLOSION:
 			DoVisualEffect( "gadgets/flash/explode", ent->origin, Vec3(), 1.0f, vec4_white );
 			PlaySFX( "gadgets/flash/explode", PlaySFXConfigPosition( ent->origin ) );
@@ -1009,6 +1042,13 @@ static void CG_FireEntityEvents( bool early ) {
  * This events are only received by this client, and only affect it.
  */
 static void CG_FirePlayerStateEvents() {
+	constexpr StringHash hitsounds[] = {
+		"sounds/misc/hit_0",
+		"sounds/misc/hit_1",
+		"sounds/misc/hit_2",
+		"sounds/misc/hit_3",
+	};
+
 	if( cg.view.POVent != ( int ) cg.frame.playerState.POVnum ) {
 		return;
 	}
@@ -1019,7 +1059,7 @@ static void CG_FirePlayerStateEvents() {
 		switch( cg.frame.playerState.events[ count ].type ) {
 			case PSEV_HIT:
 				if( parm < 4 ) { // hit of some caliber
-					PlaySFX( cgs.media.sfxWeaponHit[ parm ] );
+					PlaySFX( hitsounds[ parm ] );
 					CG_ScreenCrosshairDamageUpdate();
 				}
 				else { // killed an enemy

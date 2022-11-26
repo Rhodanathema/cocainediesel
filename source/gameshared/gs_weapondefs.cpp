@@ -2,22 +2,22 @@
 #include "qcommon/qcommon.h"
 #include "gameshared/gs_weapons.h"
 
-#define INSTANT 0
+static constexpr int HITSCAN = 0;
 
-#define WEAPONDOWN_TIME 50
-#define WEAPONUP_TIME_FAST 150
-#define WEAPONUP_TIME_NORMAL 350
-#define WEAPONUP_TIME_SLOW 750
-#define WEAPONUP_TIME_VERY_SLOW 1000
-#define HITSCAN_RANGE 9001
+static constexpr int WEAPONDOWN_TIME = 50;
+static constexpr int WEAPONUP_TIME_FAST = 150;
+static constexpr int WEAPONUP_TIME_NORMAL = 350;
+static constexpr int WEAPONUP_TIME_SLOW = 750;
+static constexpr int WEAPONUP_TIME_VERY_SLOW = 1000;
+static constexpr int HITSCAN_RANGE = 9001;
 
 const WeaponDef weapon_defs[] = {
 	{ "", "", WeaponCategory_Count }, // Weapon_None
 
 	{
 		/* name                 */ "KNIFE",
-		/* short name           */ "gb",
-		/* category             */ WeaponCategory_Count,
+		/* short name           */ "knife",
+		/* category             */ WeaponCategory_Melee,
 
 		/* projectile count     */ 8,
 		/* clip size            */ 0,
@@ -27,8 +27,8 @@ const WeaponDef weapon_defs[] = {
 		// timings (in msecs)
 		/* weapon up time       */ WEAPONUP_TIME_FAST,
 		/* weapon down time     */ WEAPONDOWN_TIME,
-		/* refire time          */ 600,
-		/* timeout / range      */ 85,
+		/* refire time          */ 200,
+		/* timeout / range      */ 90,
 		/* max recoil           */ EulerDegrees2( 0.0f, 0.0f ),
 		/* min recoil           */ EulerDegrees2( 0.0f, 0.0f ),
 		/* recoil recovery      */ 0.0f,
@@ -38,7 +38,7 @@ const WeaponDef weapon_defs[] = {
 		/* zoom inaccuracy      */ 0.0f,
 
 		// damages
-		/* damage               */ 25,
+		/* damage               */ 10,
 		/* self damage          */ 0,
 		/* wallbang damage      */ 0.0f,
 		/* knockback            */ 0,
@@ -47,8 +47,45 @@ const WeaponDef weapon_defs[] = {
 		/* splash min knockback */ 0,
 
 		// projectile def
-		/* speed                */ INSTANT,
-		/* spread               */ 20,
+		/* speed                */ HITSCAN,
+		/* spread               */ 30,
+	},
+
+	{
+		/* name                 */ "BAT",
+		/* short name           */ "bat",
+		/* category             */ WeaponCategory_Melee,
+
+		/* projectile count     */ 10,
+		/* clip size            */ 0,
+		/* reload time          */ 1000,
+		/* staged reload time   */ 0,
+
+		// timings (in msecs)
+		/* weapon up time       */ WEAPONUP_TIME_FAST,
+		/* weapon down time     */ WEAPONDOWN_TIME,
+		/* refire time          */ 350,
+		/* timeout / range      */ 70,
+		/* max recoil           */ EulerDegrees2( 0.0f, 0.0f ),
+		/* min recoil           */ EulerDegrees2( 0.0f, 0.0f ),
+		/* recoil recovery      */ 0.0f,
+		/* firing mode          */ FiringMode_SemiAuto,
+
+		/* zoom fov             */ 0.0f,
+		/* zoom inaccuracy      */ 0.0f,
+
+		// damages
+		/* damage               */ 30,
+		/* self damage          */ 0,
+		/* wallbang damage      */ 0.0f,
+		/* knockback            */ 220,
+		/* splash radius        */ 0,
+		/* splash min damage    */ 10,
+		/* splash min knockback */ 0,
+
+		// projectile def
+		/* speed                */ HITSCAN,
+		/* spread               */ 40,
 	},
 
 	{
@@ -84,7 +121,7 @@ const WeaponDef weapon_defs[] = {
 		/* splash min knockback */ 0,
 
 		// projectile def
-		/* speed                */ INSTANT,
+		/* speed                */ HITSCAN,
 		/* spread               */ 0,
 	},
 
@@ -122,7 +159,7 @@ const WeaponDef weapon_defs[] = {
 		/* splash min knockback */ 0,
 
 		// projectile def
-		/* speed                */ INSTANT,
+		/* speed                */ HITSCAN,
 		/* spread               */ 0,
 	},
 
@@ -159,7 +196,7 @@ const WeaponDef weapon_defs[] = {
 		/* splash min knockback */ 0,
 
 		// projectile def
-		/* speed                */ INSTANT,
+		/* speed                */ HITSCAN,
 		/* spread               */ 0,
 	},
 
@@ -196,7 +233,7 @@ const WeaponDef weapon_defs[] = {
 		/* splash min knockback */ 0,
 
 		// projectile def
-		/* speed                */ INSTANT,
+		/* speed                */ HITSCAN,
 		/* spread               */ 50,
 	},
 
@@ -233,7 +270,7 @@ const WeaponDef weapon_defs[] = {
 		/* splash min knockback */ 0,
 
 		// projectile def
-		/* speed                */ INSTANT,
+		/* speed                */ HITSCAN,
 		/* spread               */ 0,
 	},
 
@@ -455,7 +492,7 @@ const WeaponDef weapon_defs[] = {
 		/* splash min knockback */ 0,
 
 		// projectile def
-		/* speed                */ INSTANT,
+		/* speed                */ HITSCAN,
 		/* spread               */ 0,
 	},
 
@@ -466,13 +503,13 @@ const WeaponDef weapon_defs[] = {
 
 		/* projectile count     */ 1,
 		/* clip size            */ 0,
-		/* reload time          */ 500, // time to fully charge for rail
+		/* reload time          */ 1000, // time to fully charge for rail
 		/* staged reload time   */ 0,
 
 		// timings (in msecs)
 		/* weapon up time       */ WEAPONUP_TIME_SLOW,
 		/* weapon down time     */ WEAPONDOWN_TIME,
-		/* refire time          */ 1000,
+		/* refire time          */ 1250,
 		/* timeout / range      */ HITSCAN_RANGE,
 		/* max recoil           */ EulerDegrees2( 150.0f, 40.0f ),
 		/* min recoil           */ EulerDegrees2( 100.0f, -40.0f ),
@@ -483,7 +520,7 @@ const WeaponDef weapon_defs[] = {
 		/* zoom inaccuracy      */ 0.0f,
 
 		// damages
-		/* damage               */ 38,
+		/* damage               */ 35,
 		/* self damage          */ 0,
 		/* wallbang damage      */ 1.0f, //not implemented
 		/* knockback            */ 50,
@@ -492,7 +529,7 @@ const WeaponDef weapon_defs[] = {
 		/* splash min knockback */ 0,
 
 		// projectile def
-		/* speed                */ INSTANT,
+		/* speed                */ HITSCAN,
 		/* spread               */ 0,
 	},
 
@@ -529,7 +566,7 @@ const WeaponDef weapon_defs[] = {
 		/* splash min knockback */ 0,
 
 		// projectile def
-		/* speed                */ INSTANT,
+		/* speed                */ HITSCAN,
 		/* spread               */ 0,
 	},
 
@@ -566,7 +603,7 @@ const WeaponDef weapon_defs[] = {
 		/* splash min knockback */ 0,
 
 		// projectile def
-		/* speed                */ INSTANT,
+		/* speed                */ HITSCAN,
 		/* spread               */ 0, // fuse time
 	},
 
@@ -751,7 +788,7 @@ const WeaponDef weapon_defs[] = {
 		/* splash min knockback */ 0,
 
 		// projectile def
-		/* speed                */ INSTANT,
+		/* speed                */ HITSCAN,
 		/* spread               */ 250,
 	},
 #endif
@@ -770,40 +807,43 @@ const GadgetDef gadget_defs[] = {
 	{
 		/* name             */ "AXE",
 		/* short name       */ "hatchet",
-		/* uses             */ 1,
+		/* uses             */ 2,
+		/* drop on death    */ false,
 		/* switch in time   */ WEAPONUP_TIME_FAST,
 		/* using time       */ 50,
-		/* cook time        */ 1200,
+		/* cook time        */ 700,
 		/* switch out time  */ 400 + WEAPONDOWN_TIME,
-		/* damage           */ 50,
+		/* damage           */ 60,
 		/* knockback        */ 100,
-		/* min damage       */ 25,
+		/* min damage       */ 30,
 		/* min knockback    */ 0,
 		/* splash radius    */ 0,
 		/* timeout          */ 5000,
 		/* speed            */ 2500,
-		/* min speed        */ 1500,
+		/* min speed        */ 2000,
 	},
 
 	{
 		/* name             */ "AMERICA",
 		/* short name       */ "suicidevest",
 		/* uses             */ 1,
+		/* drop on death    */ false,
 	},
 
 	{
 		/* name             */ "FLASH",
 		/* short name       */ "flash",
 		/* uses             */ 2,
+		/* drop on death    */ true,
 		/* switch in time   */ WEAPONUP_TIME_FAST,
 		/* using time       */ 50,
 		/* cook time        */ 1200,
 		/* switch out time  */ 400 + WEAPONDOWN_TIME,
-		/* damage           */ 5,
-		/* knockback        */ 0,
+		/* damage           */ 10,
+		/* knockback        */ 80,
 		/* min damage       */ 120,
 		/* min knockback    */ 0,
-		/* splash_radius    */ 2000,
+		/* splash_radius    */ 300,
 		/* timeout          */ 1500,
 		/* speed            */ 1500,
 		/* min speed        */ 1000,
@@ -837,7 +877,7 @@ const PerkDef perk_defs[] = {
 		/* name             */ "MIDGET",
 		/* short name       */ "midget",
 		/* health           */ 65,
-		/* scale            */ Vec3( 0.8f, 0.8f, 0.625f ),
+		/* scale            */ Vec3( 1.1f, 1.1f, 0.7f ),
 		/* weight           */ 0.8f,
 		/* max speed        */ 350.0f,
 		/* side speed       */ 500.0f,

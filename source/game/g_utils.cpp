@@ -39,20 +39,12 @@ edict_t * GetEntity( EntityID id ) {
 }
 
 edict_t * G_Find( edict_t * cursor, StringHash edict_t::* field, StringHash value ) {
-	if( cursor == NULL ) {
-		cursor = world;
-	}
-	else {
-		cursor++;
-	}
-
 	const edict_t * end = game.edicts + game.numentities;
 
-	while( cursor < end ) {
+	for( cursor = cursor == NULL ? world : cursor + 1; ( cursor < end ); cursor++ ) {
 		if( cursor->r.inuse && cursor->*field == value ) {
 			return cursor;
 		}
-		cursor++;
 	}
 
 	return NULL;
@@ -201,8 +193,8 @@ void G_FreeEdict( edict_t *ed ) {
 
 	GClip_UnlinkEntity( ed );
 
-	bool ok = entity_id_hashtable.remove( ed->id.id );
-	assert( ok );
+	// bool ok = entity_id_hashtable.remove( ed->id.id );
+	// assert( ok );
 
 	memset( ed, 0, sizeof( *ed ) );
 	ed->s.number = ENTNUM( ed );
@@ -214,18 +206,18 @@ void G_FreeEdict( edict_t *ed ) {
 }
 
 void G_InitEdict( edict_t *e ) {
-	if( e->r.inuse ) {
-		bool ok = entity_id_hashtable.remove( e->id.id );
-		assert( ok );
-	}
+	// if( e->r.inuse ) {
+	// 	bool ok = entity_id_hashtable.remove( e->id.id );
+	// 	assert( ok );
+	// }
 
 	memset( e, 0, sizeof( *e ) );
 	e->s.number = ENTNUM( e );
 	e->id = NewEntity();
 	e->r.inuse = true;
 
-	bool ok = entity_id_hashtable.add( e->id.id, e->s.number );
-	assert( ok );
+	// bool ok = entity_id_hashtable.add( e->id.id, e->s.number );
+	// assert( ok );
 
 	e->s.scale = Vec3( 1.0f );
 
@@ -629,7 +621,7 @@ bool KillBox( edict_t *ent, DamageType damage_type, Vec3 knockback ) {
 	trace_t tr;
 	bool telefragged = false;
 
-	while( 1 ) {
+	while( true ) {
 		G_Trace( &tr, ent->s.origin, ent->r.mins, ent->r.maxs, ent->s.origin, world, MASK_PLAYERSOLID );
 		if( ( tr.fraction == 1.0f && !tr.startsolid ) || tr.ent < 0 ) {
 			return telefragged;
@@ -735,38 +727,6 @@ void G_CheckGround( edict_t *ent ) {
 		if( ent->velocity.z < 0.0f ) {
 			ent->velocity.z = 0.0f;
 		}
-	}
-}
-
-void G_CategorizePosition( edict_t *ent ) {
-	int cont;
-
-	//
-	// get waterlevel
-	//
-	Vec3 point = ent->s.origin;
-	point.z += ent->r.mins.z + 1.0f;
-	cont = G_PointContents( point );
-
-	if( !( cont & MASK_WATER ) ) {
-		ent->waterlevel = 0;
-		ent->watertype = 0;
-		return;
-	}
-
-	ent->watertype = cont;
-	ent->waterlevel = 1;
-	point.z += 26;
-	cont = G_PointContents( point );
-	if( !( cont & MASK_WATER ) ) {
-		return;
-	}
-
-	ent->waterlevel = 2;
-	point.z += 22;
-	cont = G_PointContents( point );
-	if( cont & MASK_WATER ) {
-		ent->waterlevel = 3;
 	}
 }
 

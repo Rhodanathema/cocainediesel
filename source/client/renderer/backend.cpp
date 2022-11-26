@@ -37,16 +37,6 @@ enum VertexAttribute : GLuint {
 	VertexAttribute_ModelTransformRow0,
 	VertexAttribute_ModelTransformRow1,
 	VertexAttribute_ModelTransformRow2,
-
-	VertexAttribute_ParticlePosition = VertexAttribute_Color,
-	VertexAttribute_ParticleVelocity,
-	VertexAttribute_ParticleAccelDragRest,
-	VertexAttribute_ParticleUVWH,
-	VertexAttribute_ParticleStartColor,
-	VertexAttribute_ParticleEndColor,
-	VertexAttribute_ParticleSize,
-	VertexAttribute_ParticleAgeLifetime,
-	VertexAttribute_ParticleFlags,
 };
 
 static const u32 UNIFORM_BUFFER_SIZE = 64 * 1024;
@@ -120,22 +110,6 @@ static GLenum DepthFuncToGL( DepthFunc depth_func ) {
 			return GL_ALWAYS;
 		case DepthFunc_Disabled:
 			return GL_ALWAYS;
-	}
-
-	assert( false );
-	return GL_INVALID_ENUM;
-}
-
-static GLenum PrimitiveTypeToGL( PrimitiveType primitive_type ) {
-	switch( primitive_type ) {
-		case PrimitiveType_Triangles:
-			return GL_TRIANGLES;
-		case PrimitiveType_TriangleStrip:
-			return GL_TRIANGLE_STRIP;
-		case PrimitiveType_Points:
-			return GL_POINTS;
-		case PrimitiveType_Lines:
-			return GL_LINES;
 	}
 
 	assert( false );
@@ -463,7 +437,7 @@ void InitRenderBackend() {
 			{ "GL_EXT_texture_sRGB_decode", GLAD_GL_EXT_texture_sRGB_decode },
 		};
 
-		String< 1024 > missing_extensions( "Your GPU doesn't have some required OpenGL extensions:" );
+		String< 1024 > missing_extensions( "Your GPU is insane and doesn't have some required OpenGL extensions:" );
 		bool any_missing = false;
 		for( auto ext : required_extensions ) {
 			if( ext.loaded == 0 ) {
@@ -479,7 +453,7 @@ void InitRenderBackend() {
 		GLint vert_buffers;
 		glGetIntegerv( GL_MAX_VERTEX_SHADER_STORAGE_BLOCKS, &vert_buffers );
 		if( vert_buffers >= 0 && size_t( vert_buffers ) < ARRAY_COUNT( &Shader::buffers ) ) {
-			Fatal( "GL_MAX_VERTEX_SHADER_STORAGE_BLOCKS too small" );
+			Fatal( "Your GPU is too old, GL_MAX_VERTEX_SHADER_STORAGE_BLOCKS is too small" );
 		}
 	}
 
@@ -572,6 +546,12 @@ void ShutdownRenderBackend() {
 	}
 
 	RunDeferredDeletes();
+
+	for( GLsync fence : fences ) {
+		if( fence != 0 ) {
+			glDeleteSync( fence );
+		}
+	}
 
 	render_passes.shutdown();
 	draw_calls.shutdown();
@@ -867,14 +847,26 @@ static void SubmitFramebufferBlit( const RenderPass & pass ) {
 	glBlitNamedFramebuffer( src.fbo, target.fbo, 0, 0, src.width, src.height, 0, 0, target.width, target.height, clear_mask, GL_NEAREST );
 }
 
+#if !TRACY_ENABLE
+namespace tracy {
+struct SourceLocationData {
+	const char * name;
+	const char * function;
+	const char * file;
+	uint32_t line;
+	uint32_t color;
+};
+}
+#endif
+
 static void SetupRenderPass( const RenderPass & pass ) {
 	TracyZoneScoped;
-	TracyZoneText( pass.name, strlen( pass.name ) );
+	TracyZoneText( pass.tracy->name, strlen( pass.tracy->name ) );
 #if TRACY_ENABLE
 	renderpass_zone = new (renderpass_zone_memory) tracy::GpuCtxScope( pass.tracy );
 #endif
 
-	glPushDebugGroup( GL_DEBUG_SOURCE_APPLICATION, 0, -1, pass.name );
+	glPushDebugGroup( GL_DEBUG_SOURCE_APPLICATION, 0, -1, pass.tracy->name );
 
 	const Framebuffer & fb = pass.target;
 	if( fb.fbo != prev_fbo ) {
@@ -894,6 +886,10 @@ static void SetupRenderPass( const RenderPass & pass ) {
 	if( pass.type == RenderPass_Blit ) {
 		SubmitFramebufferBlit( pass );
 		return;
+	}
+
+	if( pass.barrier ) {
+		glMemoryBarrier( GL_SHADER_STORAGE_BARRIER_BIT );
 	}
 
 	GLbitfield clear_mask = 0;
@@ -934,6 +930,9 @@ static void SubmitDrawCall( const DrawCall & dc ) {
 	TracyZoneScoped;
 	TracyGpuZone( "Draw call" );
 
+	if( dc.pipeline.shader->program == 0 )
+		return;
+
 	SetPipelineState( dc.pipeline, dc.mesh.ccw_winding );
 
 	if( dc.instance_type == InstanceType_ComputeShader ) {
@@ -949,33 +948,12 @@ static void SubmitDrawCall( const DrawCall & dc ) {
 	}
 
 	glBindVertexArray( dc.mesh.vao );
-	GLenum primitive = PrimitiveTypeToGL( dc.mesh.primitive_type );
 
 	if( dc.instance_type == InstanceType_Particles ) {
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticlePosition, VertexFormat_Floatx4, sizeof( GPUParticle ), offsetof( GPUParticle, position ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleVelocity, VertexFormat_Floatx4, sizeof( GPUParticle ), offsetof( GPUParticle, velocity ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleAccelDragRest, VertexFormat_Floatx3, sizeof( GPUParticle ), offsetof( GPUParticle, acceleration ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleUVWH, VertexFormat_Floatx4, sizeof( GPUParticle ), offsetof( GPUParticle, uvwh ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleStartColor, VertexFormat_U8x4_Norm, sizeof( GPUParticle ), offsetof( GPUParticle, start_color ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleEndColor, VertexFormat_U8x4_Norm, sizeof( GPUParticle ), offsetof( GPUParticle, end_color ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleSize, VertexFormat_Floatx2, sizeof( GPUParticle ), offsetof( GPUParticle, start_size ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleAgeLifetime, VertexFormat_Floatx2, sizeof( GPUParticle ), offsetof( GPUParticle, age ) );
-		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ParticleFlags, VertexFormat_U32x1, sizeof( GPUParticle ), offsetof( GPUParticle, flags ) );
-
-		glVertexAttribDivisor( VertexAttribute_ParticlePosition, 1 );
-		glVertexAttribDivisor( VertexAttribute_ParticleVelocity, 1 );
-		glVertexAttribDivisor( VertexAttribute_ParticleAccelDragRest, 1 );
-		glVertexAttribDivisor( VertexAttribute_ParticleUVWH, 1 );
-		glVertexAttribDivisor( VertexAttribute_ParticleStartColor, 1 );
-		glVertexAttribDivisor( VertexAttribute_ParticleEndColor, 1 );
-		glVertexAttribDivisor( VertexAttribute_ParticleSize, 1 );
-		glVertexAttribDivisor( VertexAttribute_ParticleAgeLifetime, 1 );
-		glVertexAttribDivisor( VertexAttribute_ParticleFlags, 1 );
-
 		GLenum type = dc.mesh.indices_format == IndexFormat_U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
 
 		glBindBuffer( GL_DRAW_INDIRECT_BUFFER, dc.indirect.buffer );
-		glDrawElementsIndirect( primitive, type, 0 );
+		glDrawElementsIndirect( GL_TRIANGLES, type, 0 );
 		glBindBuffer( GL_DRAW_INDIRECT_BUFFER, 0 );
 	}
 	else if( dc.instance_type == InstanceType_Model ) {
@@ -996,7 +974,7 @@ static void SubmitDrawCall( const DrawCall & dc ) {
 		glVertexAttribDivisor( VertexAttribute_ModelTransformRow2, 1 );
 
 		GLenum type = dc.mesh.indices_format == IndexFormat_U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
-		glDrawElementsInstanced( primitive, dc.num_vertices, type, 0, dc.num_instances );
+		glDrawElementsInstanced( GL_TRIANGLES, dc.num_vertices, type, 0, dc.num_instances );
 	}
 	else if( dc.instance_type == InstanceType_ModelShadows ) {
 		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_ModelTransformRow0, VertexFormat_Floatx4, sizeof( GPUModelShadowsInstance ), offsetof( GPUModelShadowsInstance, transform[ 0 ] ) );
@@ -1008,7 +986,7 @@ static void SubmitDrawCall( const DrawCall & dc ) {
 		glVertexAttribDivisor( VertexAttribute_ModelTransformRow2, 1 );
 
 		GLenum type = dc.mesh.indices_format == IndexFormat_U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
-		glDrawElementsInstanced( primitive, dc.num_vertices, type, 0, dc.num_instances );
+		glDrawElementsInstanced( GL_TRIANGLES, dc.num_vertices, type, 0, dc.num_instances );
 	}
 	else if( dc.instance_type == InstanceType_ModelOutlines ) {
 		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_MaterialColor, VertexFormat_Floatx4, sizeof( GPUModelOutlinesInstance ), offsetof( GPUModelOutlinesInstance, color ) );
@@ -1026,7 +1004,7 @@ static void SubmitDrawCall( const DrawCall & dc ) {
 		glVertexAttribDivisor( VertexAttribute_ModelTransformRow2, 1 );
 
 		GLenum type = dc.mesh.indices_format == IndexFormat_U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
-		glDrawElementsInstanced( primitive, dc.num_vertices, type, 0, dc.num_instances );
+		glDrawElementsInstanced( GL_TRIANGLES, dc.num_vertices, type, 0, dc.num_instances );
 	}
 	else if( dc.instance_type == InstanceType_ModelSilhouette ) {
 		SetupAttribute( dc.mesh.vao, dc.instance_data.buffer, VertexAttribute_MaterialColor, VertexFormat_Floatx4, sizeof( GPUModelSilhouetteInstance ), offsetof( GPUModelSilhouetteInstance, color ) );
@@ -1042,15 +1020,15 @@ static void SubmitDrawCall( const DrawCall & dc ) {
 		glVertexAttribDivisor( VertexAttribute_ModelTransformRow2, 1 );
 
 		GLenum type = dc.mesh.indices_format == IndexFormat_U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
-		glDrawElementsInstanced( primitive, dc.num_vertices, type, 0, dc.num_instances );
+		glDrawElementsInstanced( GL_TRIANGLES, dc.num_vertices, type, 0, dc.num_instances );
 	}
 	else if( dc.mesh.indices.buffer != 0 ) {
 		GLenum type = dc.mesh.indices_format == IndexFormat_U16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
 		const void * offset = ( const void * ) uintptr_t( dc.index_offset );
-		glDrawElements( primitive, dc.num_vertices, type, offset );
+		glDrawElements( GL_TRIANGLES, dc.num_vertices, type, offset );
 	}
 	else {
-		glDrawArrays( primitive, dc.index_offset, dc.num_vertices );
+		glDrawArrays( GL_TRIANGLES, dc.index_offset, dc.num_vertices );
 	}
 
 	glBindVertexArray( 0 );
@@ -1515,40 +1493,26 @@ void DeleteFramebuffer( Framebuffer fb ) {
 	DeleteTexture( fb.depth_texture );
 }
 
-#define MAX_GLSL_UNIFORM_JOINTS 100
+static GLuint CompileShader( GLenum type, const char * src ) {
+	constexpr int MAX_GLSL_UNIFORM_JOINTS = 100;
+	constexpr const char * VERTEX_SHADER_PRELUDE =
+		"#define VERTEX_SHADER 1\n"
+		"#define v2f out\n";
+	constexpr const char * FRAGMENT_SHADER_PRELUDE =
+		"#define FRAGMENT_SHADER 1\n"
+		"#define v2f in\n";
 
-static constexpr const char * VERTEX_SHADER_PRELUDE =
-	"#define VERTEX_SHADER 1\n"
-	"#define v2f out\n";
-
-static constexpr const char * FRAGMENT_SHADER_PRELUDE =
-	"#define FRAGMENT_SHADER 1\n"
-	"#define v2f in\n";
-
-static GLuint CompileShader( GLenum type, Span< Span< const char > > srcs ) {
 	TempAllocator temp = cls.frame_arena.temp();
 
-	DynamicArray< const char * > src_ptrs( &temp );
-	DynamicArray< int > src_lens( &temp );
-
-	src_ptrs.add( "#version 430 core\n" );
-	src_lens.add( -1 );
-
+	DynamicString prelude( &temp, "#version 430 core\n" );
 	if( type == GL_VERTEX_SHADER || type == GL_FRAGMENT_SHADER ) {
-		src_ptrs.add( type == GL_VERTEX_SHADER ? VERTEX_SHADER_PRELUDE : FRAGMENT_SHADER_PRELUDE );
-		src_lens.add( -1 );
-
-		src_ptrs.add( "#define MAX_JOINTS " STRINGIFY( MAX_GLSL_UNIFORM_JOINTS ) "\n" );
-		src_lens.add( -1 );
+		prelude.append( "{}", type == GL_VERTEX_SHADER ? VERTEX_SHADER_PRELUDE : FRAGMENT_SHADER_PRELUDE );
+		prelude.append( "#define MAX_JOINTS {}\n", MAX_GLSL_UNIFORM_JOINTS );
 	}
 
-	for( Span< const char > fragment : srcs ) {
-		src_ptrs.add( fragment.ptr );
-		src_lens.add( checked_cast< int >( fragment.n ) );
-	}
-
+	const char * full_src = temp( "{}{}", prelude, src );
 	GLuint shader = glCreateShader( type );
-	glShaderSource( shader, src_ptrs.size(), src_ptrs.ptr(), src_lens.ptr() );
+	glShaderSource( shader, 1, &full_src, NULL );
 	glCompileShader( shader );
 
 	GLint status;
@@ -1643,51 +1607,41 @@ static bool LinkShader( Shader * shader, GLuint program ) {
 	return true;
 }
 
-bool NewShader( Shader * shader, Span< Span< const char > > srcs, bool particle_vertex_attribs ) {
+bool NewShader( Shader * shader, const char * src, const char * name ) {
+	TempAllocator temp = cls.frame_arena.temp();
+
 	*shader = { };
 
-	GLuint vs = CompileShader( GL_VERTEX_SHADER, srcs );
+	GLuint vs = CompileShader( GL_VERTEX_SHADER, src );
 	if( vs == 0 )
 		return false;
+	DebugLabel( GL_SHADER, vs, temp( "{} [VS]", name ) );
 	defer { glDeleteShader( vs ); };
 
-	GLuint fs = CompileShader( GL_FRAGMENT_SHADER, srcs );
+	GLuint fs = CompileShader( GL_FRAGMENT_SHADER, src );
 	if( fs == 0 )
 		return false;
+	DebugLabel( GL_SHADER, fs, temp( "{} [FS]", name ) );
+	defer { glDeleteShader( fs ); };
 
 	shader->program = glCreateProgram();
+	DebugLabel( GL_PROGRAM, shader->program, name );
 	glAttachShader( shader->program, vs );
 	glAttachShader( shader->program, fs );
 
-	if( particle_vertex_attribs ) {
-		glBindAttribLocation( shader->program, VertexAttribute_Position, "a_Position" );
-		glBindAttribLocation( shader->program, VertexAttribute_Normal, "a_Normal" );
-		glBindAttribLocation( shader->program, VertexAttribute_TexCoord, "a_TexCoord" );
-		glBindAttribLocation( shader->program, VertexAttribute_ParticlePosition, "a_ParticlePosition" );
-		glBindAttribLocation( shader->program, VertexAttribute_ParticleVelocity, "a_ParticleVelocity" );
-		glBindAttribLocation( shader->program, VertexAttribute_ParticleAccelDragRest, "a_ParticleAccelDragRest" );
-		glBindAttribLocation( shader->program, VertexAttribute_ParticleUVWH, "a_ParticleUVWH" );
-		glBindAttribLocation( shader->program, VertexAttribute_ParticleStartColor, "a_ParticleStartColor" );
-		glBindAttribLocation( shader->program, VertexAttribute_ParticleEndColor, "a_ParticleEndColor" );
-		glBindAttribLocation( shader->program, VertexAttribute_ParticleSize, "a_ParticleSize" );
-		glBindAttribLocation( shader->program, VertexAttribute_ParticleAgeLifetime, "a_ParticleAgeLifetime" );
-		glBindAttribLocation( shader->program, VertexAttribute_ParticleFlags, "a_ParticleFlags" );
-	}
-	else {
-		glBindAttribLocation( shader->program, VertexAttribute_Position, "a_Position" );
-		glBindAttribLocation( shader->program, VertexAttribute_Normal, "a_Normal" );
-		glBindAttribLocation( shader->program, VertexAttribute_TexCoord, "a_TexCoord" );
-		glBindAttribLocation( shader->program, VertexAttribute_Color, "a_Color" );
-		glBindAttribLocation( shader->program, VertexAttribute_JointIndices, "a_JointIndices" );
-		glBindAttribLocation( shader->program, VertexAttribute_JointWeights, "a_JointWeights" );
-		glBindAttribLocation( shader->program, VertexAttribute_MaterialColor, "a_MaterialColor" );
-		glBindAttribLocation( shader->program, VertexAttribute_MaterialTextureMatrix0, "a_MaterialTextureMatrix0" );
-		glBindAttribLocation( shader->program, VertexAttribute_MaterialTextureMatrix1, "a_MaterialTextureMatrix1" );
-		glBindAttribLocation( shader->program, VertexAttribute_OutlineHeight, "a_OutlineHeight" );
-		glBindAttribLocation( shader->program, VertexAttribute_ModelTransformRow0, "a_ModelTransformRow0" );
-		glBindAttribLocation( shader->program, VertexAttribute_ModelTransformRow1, "a_ModelTransformRow1" );
-		glBindAttribLocation( shader->program, VertexAttribute_ModelTransformRow2, "a_ModelTransformRow2" );
-	}
+	glBindAttribLocation( shader->program, VertexAttribute_Position, "a_Position" );
+	glBindAttribLocation( shader->program, VertexAttribute_Normal, "a_Normal" );
+	glBindAttribLocation( shader->program, VertexAttribute_TexCoord, "a_TexCoord" );
+	glBindAttribLocation( shader->program, VertexAttribute_Color, "a_Color" );
+	glBindAttribLocation( shader->program, VertexAttribute_JointIndices, "a_JointIndices" );
+	glBindAttribLocation( shader->program, VertexAttribute_JointWeights, "a_JointWeights" );
+	glBindAttribLocation( shader->program, VertexAttribute_MaterialColor, "a_MaterialColor" );
+	glBindAttribLocation( shader->program, VertexAttribute_MaterialTextureMatrix0, "a_MaterialTextureMatrix0" );
+	glBindAttribLocation( shader->program, VertexAttribute_MaterialTextureMatrix1, "a_MaterialTextureMatrix1" );
+	glBindAttribLocation( shader->program, VertexAttribute_OutlineHeight, "a_OutlineHeight" );
+	glBindAttribLocation( shader->program, VertexAttribute_ModelTransformRow0, "a_ModelTransformRow0" );
+	glBindAttribLocation( shader->program, VertexAttribute_ModelTransformRow1, "a_ModelTransformRow1" );
+	glBindAttribLocation( shader->program, VertexAttribute_ModelTransformRow2, "a_ModelTransformRow2" );
 
 	glBindFragDataLocation( shader->program, 0, "f_Albedo" );
 	glBindFragDataLocation( shader->program, 1, "f_Mask" );
@@ -1695,15 +1649,19 @@ bool NewShader( Shader * shader, Span< Span< const char > > srcs, bool particle_
 	return LinkShader( shader, shader->program );
 }
 
-bool NewComputeShader( Shader * shader, Span< Span< const char > > srcs ) {
+bool NewComputeShader( Shader * shader, const char * src, const char * name ) {
+	TempAllocator temp = cls.frame_arena.temp();
+
 	*shader = { };
 
-	GLuint cs = CompileShader( GL_COMPUTE_SHADER, srcs );
+	GLuint cs = CompileShader( GL_COMPUTE_SHADER, src );
 	if( cs == 0 )
 		return false;
+	DebugLabel( GL_SHADER, cs, temp( "{} [CS]", name ) );
 	defer { glDeleteShader( cs ); };
 
 	shader->program = glCreateProgram();
+	DebugLabel( GL_PROGRAM, shader->program, name );
 	glAttachShader( shader->program, cs );
 
 	return LinkShader( shader, shader->program );
@@ -1722,20 +1680,6 @@ void DeleteShader( Shader shader ) {
 }
 
 Mesh NewMesh( MeshConfig config ) {
-	switch( config.primitive_type ) {
-		case PrimitiveType_Triangles:
-			assert( config.num_vertices % 3 == 0 );
-			break;
-		case PrimitiveType_TriangleStrip:
-			assert( config.num_vertices >= 3 );
-			break;
-		case PrimitiveType_Points:
-			break;
-		case PrimitiveType_Lines:
-			assert( config.num_vertices % 2 == 0 );
-			break;
-	}
-
 	GLuint vao;
 	glCreateVertexArrays( 1, &vao );
 	DebugLabel( GL_VERTEX_ARRAY, vao, config.name );
@@ -1764,7 +1708,6 @@ Mesh NewMesh( MeshConfig config ) {
 
 	Mesh mesh = { };
 	mesh.num_vertices = config.num_vertices;
-	mesh.primitive_type = config.primitive_type;
 	mesh.ccw_winding = config.ccw_winding;
 	mesh.vao = vao;
 	if( config.unified_buffer.buffer == 0 ) {
@@ -1836,40 +1779,46 @@ void DrawInstancedMesh( const Mesh & mesh, const PipelineState & pipeline, GPUBu
 	num_vertices_this_frame += dc.num_vertices * num_instances;
 }
 
-u8 AddRenderPass( const RenderPass & pass ) {
+static u8 AddRenderPass( const RenderPass & pass ) {
 	return checked_cast< u8 >( render_passes.add( pass ) );
 }
 
-u8 AddRenderPass( const char * name, const tracy::SourceLocationData * tracy, Framebuffer target, ClearColor clear_color, ClearDepth clear_depth ) {
+u8 AddRenderPass( const tracy::SourceLocationData * tracy, Framebuffer target, ClearColor clear_color, ClearDepth clear_depth ) {
 	RenderPass pass;
 	pass.type = RenderPass_Normal;
 	pass.target = target;
-	pass.name = name;
 	pass.clear_color = clear_color == ClearColor_Do;
 	pass.clear_depth = clear_depth == ClearDepth_Do;
 	pass.tracy = tracy;
 	return AddRenderPass( pass );
 }
 
-u8 AddRenderPass( const char * name, const tracy::SourceLocationData * tracy, ClearColor clear_color, ClearDepth clear_depth ) {
+u8 AddRenderPass( const tracy::SourceLocationData * tracy, ClearColor clear_color, ClearDepth clear_depth ) {
 	Framebuffer target = { };
-	return AddRenderPass( name, tracy, target, clear_color, clear_depth );
+	return AddRenderPass( tracy, target, clear_color, clear_depth );
 }
 
-u8 AddUnsortedRenderPass( const char * name, const tracy::SourceLocationData * tracy, Framebuffer target ) {
+u8 AddBarrierRenderPass( const tracy::SourceLocationData * tracy, Framebuffer target ) {
 	RenderPass pass;
 	pass.type = RenderPass_Normal;
 	pass.target = target;
-	pass.name = name;
+	pass.barrier = true;
+	pass.tracy = tracy;
+	return AddRenderPass( pass );
+}
+
+u8 AddUnsortedRenderPass( const tracy::SourceLocationData * tracy, Framebuffer target ) {
+	RenderPass pass;
+	pass.type = RenderPass_Normal;
+	pass.target = target;
 	pass.sorted = false;
 	pass.tracy = tracy;
 	return AddRenderPass( pass );
 }
 
-void AddBlitPass( const char * name, const tracy::SourceLocationData * tracy, Framebuffer src, Framebuffer dst, ClearColor clear_color, ClearDepth clear_depth ) {
+void AddBlitPass( const tracy::SourceLocationData * tracy, Framebuffer src, Framebuffer dst, ClearColor clear_color, ClearDepth clear_depth ) {
 	RenderPass pass;
 	pass.type = RenderPass_Blit;
-	pass.name = name;
 	pass.tracy = tracy;
 	pass.blit_source = src;
 	pass.target = dst;
@@ -1878,8 +1827,8 @@ void AddBlitPass( const char * name, const tracy::SourceLocationData * tracy, Fr
 	AddRenderPass( pass );
 }
 
-void AddResolveMSAAPass( const char * name, const tracy::SourceLocationData * tracy, Framebuffer src, Framebuffer dst, ClearColor clear_color, ClearDepth clear_depth ) {
-	AddBlitPass( name, tracy, src, dst, clear_color, clear_depth );
+void AddResolveMSAAPass( const tracy::SourceLocationData * tracy, Framebuffer src, Framebuffer dst, ClearColor clear_color, ClearDepth clear_depth ) {
+	AddBlitPass( tracy, src, dst, clear_color, clear_depth );
 }
 
 void DispatchCompute( const PipelineState & pipeline, u32 x, u32 y, u32 z ) {
@@ -1900,11 +1849,10 @@ void DispatchComputeIndirect( const PipelineState & pipeline, GPUBuffer indirect
 	draw_calls.add( dc );
 }
 
-void DrawElementsIndirect( const Mesh & mesh, const PipelineState & pipeline, GPUBuffer instance_data, GPUBuffer indirect ) {
+void DrawInstancedParticles( const Mesh & mesh, const PipelineState & pipeline, GPUBuffer indirect ) {
 	DrawCall dc = { };
 	dc.pipeline = pipeline;
 	dc.instance_type = InstanceType_Particles;
-	dc.instance_data = instance_data;
 	dc.mesh = mesh;
 	dc.indirect = indirect;
 	draw_calls.add( dc );

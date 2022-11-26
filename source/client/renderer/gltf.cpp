@@ -101,8 +101,13 @@ static void LoadGeometry( const char * filename, Model * model, const cgltf_node
 		}
 
 		if( attr.type == cgltf_attribute_type_texcoord ) {
-			mesh_config.tex_coords = NewGPUBuffer( AccessorToSpan( attr.data ) );
-			mesh_config.tex_coords_format = VertexFormatFromGLTF( attr.data->type, attr.data->component_type, attr.data->normalized );
+			if( mesh_config.tex_coords.buffer != 0 ) {
+				Com_Printf( S_COLOR_YELLOW "%s has multiple sets of uvs\n", filename );
+			}
+			else {
+				mesh_config.tex_coords = NewGPUBuffer( AccessorToSpan( attr.data ) );
+				mesh_config.tex_coords_format = VertexFormatFromGLTF( attr.data->type, attr.data->component_type, attr.data->normalized );
+			}
 		}
 
 		if( attr.type == cgltf_attribute_type_color ) {
@@ -239,7 +244,7 @@ static void LoadNode( const char * filename, Model * model, cgltf_data * gltf, c
 		}
 		else if( type == "dlight" ) {
 			node->vfx_type = ModelVfxType_DynamicLight;
-			node->dlight_node.color = color;
+			node->dlight_node.color = color.xyz();
 			Span< const char > intensity = GetExtrasKey( "intensity", &extras );
 			node->dlight_node.intensity = ParseFloat( &intensity, 0.0f, Parse_DontStopOnNewLine );
 		}

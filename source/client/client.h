@@ -100,12 +100,6 @@ of server connections
 ==================================================================
 */
 
-enum keydest_t {
-	key_game,
-	key_ImGui,
-	key_menu,
-};
-
 struct client_static_t {
 	ArenaAllocator frame_arena;
 
@@ -113,9 +107,10 @@ struct client_static_t {
 
 	u64 session_id;
 	connstate_t state;          // only set through CL_SetClientState
-	keydest_t key_dest;
 
 	Time monotonicTime; // starts at 0 when the game is launched, increases forever
+
+	Time shadertoy_time; // starts at 0 when the game is launched, periodically gets reset
 
 	int64_t framecount;
 	int64_t realtime;               // always increasing, no clamping, etc
@@ -132,8 +127,6 @@ struct client_static_t {
 	NetAddress serveraddress; // address of that server
 	Optional< Time > connect_time; // for connection retransmits
 	int connect_count;
-
-	NetAddress rconaddress;       // address where we are sending rcon messages, to ignore other print packets
 
 	char * server_name;
 	char * download_url;              // http://<httpaddress>/
@@ -216,8 +209,6 @@ void CL_SendMessagesToServer( bool sendNow );
 void CL_RestartTimeDeltas( int newTimeDelta );
 void CL_AdjustServerTime( unsigned int gamemsec );
 
-void CL_SetKeyDest( keydest_t key_dest );
-void CL_SetOldKeyDest( keydest_t key_dest );
 void CL_SetClientState( connstate_t state );
 void CL_ClearState();
 void CL_ReadPackets();
@@ -247,8 +238,8 @@ void CL_GameModule_EscapeKey();
 bool CL_GameModule_NewSnapshot( int pendingSnapshot );
 void CL_GameModule_RenderView();
 void CL_GameModule_InputFrame( int frameTime );
-u8 CL_GameModule_GetButtonBits();
-u8 CL_GameModule_GetButtonDownEdges();
+UserCommandButton CL_GameModule_GetButtonBits();
+UserCommandButton CL_GameModule_GetButtonDownEdges();
 void CL_GameModule_AddViewAngles( Vec3 * viewAngles );
 void CL_GameModule_AddMovement( Vec3 * movement );
 void CL_GameModule_MouseMove( Vec2 m );

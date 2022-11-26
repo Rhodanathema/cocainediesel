@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "qcommon/array.h"
 #include "qcommon/types.h"
 
 enum OpenFileMode {

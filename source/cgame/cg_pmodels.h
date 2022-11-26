@@ -148,6 +148,7 @@ struct pmodel_animationstate_t {
 enum PlayerSound {
 	PlayerSound_Death,
 	PlayerSound_Void,
+	PlayerSound_Smackdown,
 	PlayerSound_Jump,
 	PlayerSound_Pain25,
 	PlayerSound_Pain50,
@@ -180,7 +181,9 @@ struct PlayerModelMetadata {
 
 	Tag tag_bomb;
 	Tag tag_hat;
+	Tag tag_mask;
 	Tag tag_weapon;
+	Tag tag_gadget;
 
 	AnimationClip clips[ PMODEL_TOTAL_ANIMATIONS ];
 };
@@ -224,6 +227,7 @@ void CG_PModel_ClearEventAnimations( int entNum );
 void InitWeaponModels();
 const WeaponModelMetadata * GetWeaponModelMetadata( WeaponType weapon );
 const GadgetModelMetadata * GetGadgetModelMetadata( GadgetType gadget );
+const Model * GetEquippedModelMetadata( const SyncPlayerState * ps );
 
 //=================================================
 //				VIEW WEAPON

@@ -479,11 +479,13 @@ static void Delta( DeltaBuffer * buf, SyncEntityState & ent, const SyncEntitySta
 	Delta( buf, ent.ownerNum, baseline.ownerNum );
 	Delta( buf, ent.sound, baseline.sound );
 	Delta( buf, ent.model2, baseline.model2 );
+	Delta( buf, ent.mask, baseline.mask );
 	Delta( buf, ent.animating, baseline.animating );
 	Delta( buf, ent.animation_time, baseline.animation_time );
 	Delta( buf, ent.site_letter, baseline.site_letter );
 	Delta( buf, ent.positioned_sound, baseline.positioned_sound );
 	DeltaEnum( buf, ent.weapon, baseline.weapon, Weapon_Count );
+	DeltaEnum( buf, ent.gadget, baseline.gadget, Gadget_Count );
 	Delta( buf, ent.radius, baseline.radius );
 	DeltaEnum( buf, ent.team, baseline.team, Team_Count );
 	Delta( buf, ent.scale, baseline.scale );
@@ -552,8 +554,8 @@ static void Delta( DeltaBuffer * buf, UserCommand & cmd, const UserCommand & bas
 	Delta( buf, cmd.angles, baseline.angles );
 	Delta( buf, cmd.forwardmove, baseline.forwardmove );
 	Delta( buf, cmd.sidemove, baseline.sidemove );
-	Delta( buf, cmd.buttons, baseline.buttons );
-	Delta( buf, cmd.down_edges, baseline.down_edges );
+	DeltaEnum( buf, cmd.buttons, baseline.buttons, UserCommandButton( U8_MAX ) ); // TODO: dunno how to represent bitfields here
+	DeltaEnum( buf, cmd.down_edges, baseline.down_edges, UserCommandButton( U8_MAX ) );
 	Delta( buf, cmd.entropy, baseline.entropy );
 	DeltaEnum( buf, cmd.weaponSwitch, baseline.weaponSwitch, Weapon_Count );
 }
@@ -595,6 +597,7 @@ static void Delta( DeltaBuffer * buf, pmove_state_t & pmove, const pmove_state_t
 	Delta( buf, pmove.knockback_time, baseline.knockback_time );
 	Delta( buf, pmove.stamina, baseline.stamina );
 	Delta( buf, pmove.stamina_stored, baseline.stamina_stored );
+	Delta( buf, pmove.jump_buffering, baseline.jump_buffering );
 	DeltaEnum( buf, pmove.stamina_state, baseline.stamina_state, Stamina_Count );
 
 	Delta( buf, pmove.max_speed, baseline.max_speed );
@@ -648,9 +651,6 @@ static void Delta( DeltaBuffer * buf, SyncPlayerState & player, const SyncPlayer
 
 	DeltaEnum( buf, player.progress_type, baseline.progress_type, BombProgress_Count );
 	Delta( buf, player.progress, baseline.progress );
-
-	Delta( buf, player.pointed_player, baseline.pointed_player );
-	Delta( buf, player.pointed_health, baseline.pointed_health );
 }
 
 void MSG_WriteDeltaPlayerState( msg_t * msg, const SyncPlayerState * baseline, const SyncPlayerState * player ) {
@@ -703,8 +703,6 @@ static void Delta( DeltaBuffer * buf, SyncBombGameState & bomb, const SyncBombGa
 	Delta( buf, bomb.alpha_players_total, baseline.alpha_players_total );
 	Delta( buf, bomb.beta_players_alive, baseline.beta_players_alive );
 	Delta( buf, bomb.beta_players_total, baseline.beta_players_total );
-	Delta( buf, bomb.exploding, baseline.exploding );
-	Delta( buf, bomb.exploded_at, baseline.exploded_at );
 }
 
 static void Delta( DeltaBuffer * buf, SyncGameState & state, const SyncGameState & baseline ) {
@@ -730,6 +728,8 @@ static void Delta( DeltaBuffer * buf, SyncGameState & state, const SyncGameState
 	Delta( buf, state.map_checksum, baseline.map_checksum );
 
 	Delta( buf, state.bomb, baseline.bomb );
+	Delta( buf, state.exploding, baseline.exploding );
+	Delta( buf, state.exploded_at, baseline.exploded_at );
 }
 
 void MSG_WriteDeltaGameState( msg_t * msg, const SyncGameState * baseline, const SyncGameState * state ) {

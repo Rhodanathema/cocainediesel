@@ -87,7 +87,7 @@ struct level_locals_t {
 
 	bool exitNow;
 
-	GametypeSpec gametype;
+	GametypeDef gametype;
 
 	bool ready[MAX_CLIENTS];
 
@@ -122,10 +122,6 @@ struct score_stats_t {
 	int score;
 	bool ready;
 
-	int accuracy_shots[ Weapon_Count ];
-	int accuracy_hits[ Weapon_Count ];
-	int accuracy_damage[ Weapon_Count ];
-	int accuracy_frags[ Weapon_Count ];
 	int total_damage_given;
 	int total_damage_received;
 };
@@ -155,7 +151,6 @@ extern Cvar *g_projectile_prestep;
 extern Cvar *g_numbots;
 extern Cvar *g_maxtimeouts;
 
-extern Cvar *g_deadbody_followkiller;
 extern Cvar *g_antilag_timenudge;
 extern Cvar *g_antilag_maxtimedelta;
 
@@ -192,10 +187,7 @@ void SP_post_match_camera( edict_t * ent, const spawn_temp_t * st );
 //
 void SP_func_rotating( edict_t * ent, const spawn_temp_t * st );
 void SP_func_door( edict_t * ent, const spawn_temp_t * st );
-void SP_func_door_rotating( edict_t * ent, const spawn_temp_t * st );
 void SP_func_train( edict_t * ent, const spawn_temp_t * st );
-void SP_func_wall( edict_t * ent, const spawn_temp_t * st );
-void SP_func_static( edict_t * ent, const spawn_temp_t * st );
 
 //
 // g_spikes
@@ -285,7 +277,6 @@ void G_TeleportEffect( edict_t * ent, bool in );
 void G_RespawnEffect( edict_t * ent );
 int G_SolidMaskForEnt( edict_t * ent );
 void G_CheckGround( edict_t * ent );
-void G_CategorizePosition( edict_t * ent );
 void G_ReleaseClientPSEvent( gclient_t *client );
 void G_AddPlayerStateEvent( gclient_t *client, int event, u64 parm );
 void G_ClearPlayerStateEvents( gclient_t *client );
@@ -307,18 +298,13 @@ bool G_Callvotes_HasVoted( edict_t * ent );
 void G_CallVote_Cmd( edict_t * ent, msg_t args );
 void G_CallVotes_VoteYes( edict_t * ent, msg_t args );
 void G_CallVotes_VoteNo( edict_t * ent, msg_t args );
-void G_OperatorVote_Cmd( edict_t * ent, msg_t args );
 
 //
 // g_trigger.c
 //
 void SP_trigger_teleport( edict_t * ent, const spawn_temp_t * st );
-void SP_trigger_always( edict_t * ent, const spawn_temp_t * st );
-void SP_trigger_once( edict_t * ent, const spawn_temp_t * st );
-void SP_trigger_multiple( edict_t * ent, const spawn_temp_t * st );
 void SP_trigger_push( edict_t * ent, const spawn_temp_t * st );
 void SP_trigger_hurt( edict_t * ent, const spawn_temp_t * st );
-void SP_trigger_key( edict_t * ent, const spawn_temp_t * st );
 
 void InitTrigger( edict_t * self );
 bool G_TriggerWait( edict_t * ent );
@@ -333,9 +319,7 @@ struct link_t {
 	int entNum;
 };
 
-int G_PointContents( Vec3 p );
 void G_Trace( trace_t *tr, Vec3 start, Vec3 mins, Vec3 maxs, Vec3 end, edict_t *passedict, int contentmask );
-int G_PointContents4D( Vec3 p, int timeDelta );
 void G_Trace4D( trace_t *tr, Vec3 start, Vec3 mins, Vec3 maxs, Vec3 end, edict_t *passedict, int contentmask, int timeDelta );
 void GClip_BackUpCollisionFrame();
 int GClip_FindInRadius4D( Vec3 org, float rad, int *list, int maxcount, int timeDelta );
@@ -368,7 +352,7 @@ void G_Killed( edict_t *targ, edict_t *inflictor, edict_t *attacker, int topAssi
 void G_SplashFrac( const SyncEntityState *s, const entity_shared_t *r, Vec3 point, float maxradius, Vec3 * pushdir, float *frac, bool selfdamage );
 void G_Damage( edict_t *targ, edict_t *inflictor, edict_t *attacker, Vec3 pushdir, Vec3 dmgdir, Vec3 point, float damage, float knockback, int dflags, DamageType damage_type );
 void SpawnDamageEvents( const edict_t * attacker, edict_t * victim, float damage, bool headshot, Vec3 pos, Vec3 dir, bool showNumbers );
-void G_RadiusKnockback( const WeaponDef * def, edict_t *attacker, Vec3 pos, Plane *plane, DamageType damage_type, int timeDelta );
+void G_RadiusKnockback( float maxknockback, float minknockback, float radius, edict_t *attacker, Vec3 pos, Plane *plane, int timeDelta );
 void G_RadiusDamage( edict_t *inflictor, edict_t *attacker, Plane *plane, edict_t *ignore, DamageType damage_type );
 
 // damage flags
@@ -390,6 +374,7 @@ void SP_decal( edict_t * ent, const spawn_temp_t * st );
 // g_weapon.c
 //
 void G_FireWeapon( edict_t * ent, u64 parm );
+void G_AltFireWeapon( edict_t * ent, u64 parm );
 void G_UseGadget( edict_t * ent, GadgetType gadget, u64 parm );
 
 //
@@ -419,7 +404,8 @@ void ClientDisconnect( edict_t * ent, const char *reason );
 void ClientBegin( edict_t * ent );
 void ClientCommand( edict_t * ent, ClientCommandType command, msg_t args );
 void G_PredictedEvent( int entNum, int ev, u64 parm );
-void G_PredictedFireWeapon( int entNum, u64 weapon_and_entropy );
+void G_PredictedFireWeapon( int entNum, u64 parm );
+void G_PredictedAltFireWeapon( int entNum, u64 parm );
 void G_PredictedUseGadget( int entNum, GadgetType gadget, u64 parm );
 void G_SelectWeapon( edict_t * ent, int index );
 void G_GiveWeapon( edict_t * ent, WeaponType weapon );
@@ -439,7 +425,6 @@ void player_think( edict_t *self );
 //
 void SP_target_laser( edict_t * ent, const spawn_temp_t * st );
 void SP_target_position( edict_t * ent, const spawn_temp_t * st );
-void SP_target_delay( edict_t * ent, const spawn_temp_t * st );
 
 //
 // g_svcmds.c
@@ -450,17 +435,10 @@ void G_RemoveCommands();
 //
 // p_view.c
 //
+void G_ClientSetStats( edict_t * ent );
 void G_ClientEndSnapFrame( edict_t * ent );
 void G_ClientAddDamageIndicatorImpact( gclient_t *client, int damage, Vec3 dir );
 void G_ClientDamageFeedback( edict_t * ent );
-
-//
-// p_hud.c
-//
-
-
-void G_SetClientStats( edict_t * ent );
-void G_Snap_UpdateWeaponListMessages();
 
 //
 // g_phys.c
@@ -541,7 +519,6 @@ struct moveinfo_t {
 
 	// state data
 	int state;
-	float current_speed;    // used by func_rotating
 
 	void ( *endfunc )( edict_t * );
 	void ( *blocked )( edict_t *self, edict_t *other );
@@ -572,9 +549,6 @@ struct client_respawnreset_t {
 	SyncEvent events[MAX_CLIENT_EVENTS];
 	unsigned int eventsCurrent;
 	unsigned int eventsHead;
-
-	int old_waterlevel;
-	int old_watertype;
 };
 
 struct client_levelreset_t {
@@ -698,7 +672,6 @@ struct edict_t {
 
 	float angle;                // set in qe3, -1 = up, -2 = down
 	float speed;
-	float accel, decel;         // usef for func_rotating
 
 	int64_t timeStamp;
 	int64_t deathTimeStamp;
@@ -739,9 +712,6 @@ struct edict_t {
 	s64 wait;
 	s64 delay;                // before firing targets
 	s64 wait_randomness;
-
-	int watertype;
-	int waterlevel;
 
 	int style;                  // also used as areaportal number
 

@@ -33,7 +33,7 @@ static void CL_CreateNewUserCommand( int realMsec );
 * Notifies cgame of new frame, refreshes input timings, coordinates and angles
 */
 static void CL_UpdateGameInput( Vec2 movement, int frameTime ) {
-	if( cls.key_dest == key_game && cls.state == CA_ACTIVE ) {
+	if( cls.state == CA_ACTIVE ) {
 		CL_GameModule_MouseMove( movement );
 		cl.viewangles += CG_GetDeltaViewAngles();
 	}
@@ -42,10 +42,7 @@ static void CL_UpdateGameInput( Vec2 movement, int frameTime ) {
 void CL_UserInputFrame( int realMsec ) {
 	TracyZoneScoped;
 
-	// Grab input before possibly resetting it in GlfwInputFrame
-	Vec2 movement = GetMouseMovement();
-
-	GlfwInputFrame();
+	Vec2 movement = GetRelativeMouseMovement();
 
 	// refresh mouse angles and movement velocity
 	CL_UpdateGameInput( movement, realMsec );
@@ -73,19 +70,17 @@ void CL_InitInput() {
 static void CL_RefreshUcmd( UserCommand *ucmd, int msec, bool ready ) {
 	ucmd->msec += msec;
 
-	if( ucmd->msec && cls.key_dest == key_game ) {
-		Vec2 movement = CG_GetMovement();
+	Vec2 movement = CG_GetMovement();
 
-		ucmd->sidemove = movement.x * 127.0f;
-		ucmd->forwardmove = movement.y * 127.0f;
+	ucmd->sidemove = movement.x * 127.0f;
+	ucmd->forwardmove = movement.y * 127.0f;
 
-		ucmd->buttons |= CL_GameModule_GetButtonBits();
-		ucmd->down_edges |= CL_GameModule_GetButtonDownEdges();
+	ucmd->buttons |= CL_GameModule_GetButtonBits();
+	ucmd->down_edges |= CL_GameModule_GetButtonDownEdges();
 
-		if( cl.weaponSwitch != Weapon_None ) {
-			ucmd->weaponSwitch = cl.weaponSwitch;
-			cl.weaponSwitch = Weapon_None;
-		}
+	if( cl.weaponSwitch != Weapon_None ) {
+		ucmd->weaponSwitch = cl.weaponSwitch;
+		cl.weaponSwitch = Weapon_None;
 	}
 
 	if( ready ) {

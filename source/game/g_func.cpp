@@ -126,84 +126,10 @@ static void Move_Calc( edict_t *ent, Vec3 dest, void ( *func )( edict_t * ) ) {
 	}
 }
 
-
-//
-// Support routines for angular movement (changes in angle using avelocity)
-//
-
-static void AngleMove_Done( edict_t *ent ) {
-	ent->avelocity = Vec3( 0.0f );
-	ent->moveinfo.endfunc( ent );
-}
-
-static bool AngleMove_AdjustFinalStep( edict_t *ent ) {
-	Vec3 destdelta = ent->moveinfo.destangles - ent->s.angles;
-	float remainingdist = Length( destdelta );
-	destdelta = Normalize( destdelta );
-
-	float movedist = ent->moveinfo.speed * ( game.frametime * 0.001f );
-	if( remainingdist <= movedist ) { // final move: will be reached this frame
-		ent->avelocity = destdelta * 1000.0f / game.frametime;
-		return true;
-	}
-
-	return false;
-}
-
-static void AngleMove_Watch( edict_t *ent ) {
-	// update remaining distance
-	Vec3 destdelta = Normalize( ent->moveinfo.destangles - ent->s.angles );
-
-	// reached?
-	if( destdelta == Vec3( 0.0f ) ) {
-		AngleMove_Done( ent );
-		return;
-	}
-
-	if( AngleMove_AdjustFinalStep( ent ) ) {
-		ent->think = AngleMove_Done;
-		ent->nextThink = level.time + 1;
-		return;
-	} else {
-		ent->avelocity = destdelta * ent->moveinfo.speed;
-	}
-
-	ent->think =  AngleMove_Watch;
-	ent->nextThink = level.time + 1;
-}
-
-static void AngleMove_Begin( edict_t *ent ) {
-	if( AngleMove_AdjustFinalStep( ent ) ) {
-		ent->think = AngleMove_Done;
-		ent->nextThink = level.time + 1;
-		return;
-	}
-
-	// set up velocity vector
-	Vec3 destdelta = Normalize( ent->moveinfo.destangles - ent->s.angles );
-
-	ent->avelocity = destdelta * ent->moveinfo.speed;
-	ent->nextThink = level.time + 1;
-	ent->think = AngleMove_Watch;
-}
-
-static void AngleMove_Calc( edict_t *ent, Vec3 destangles, void ( *func )( edict_t * ) ) {
-	ent->avelocity = Vec3( 0.0f );
-	ent->moveinfo.destangles = destangles;
-	ent->moveinfo.endfunc = func;
-
-	if( level.current_entity == ent ) {
-		AngleMove_Begin( ent );
-	} else {
-		ent->nextThink = level.time + 1;
-		ent->think = AngleMove_Begin;
-	}
-}
-
-#define STATE_TOP       0
-#define STATE_BOTTOM        1
-#define STATE_UP        2
-#define STATE_DOWN      3
+static constexpr int STATE_TOP = 0;
+static constexpr int STATE_BOTTOM = 1;
+static constexpr int STATE_UP = 2;
+static constexpr int STATE_DOWN = 3;
 
 //=========================================================
 //
@@ -214,14 +140,9 @@ static void AngleMove_Calc( edict_t *ent, Vec3 destangles, void ( *func )( edict
 //
 //=========================================================
 
-#define DOOR_START_OPEN     1
-#define DOOR_REVERSE        2
-#define DOOR_CRUSHER        4
-#define DOOR_NOMONSTER      8
-
-#define DOOR_TOGGLE         32
-#define DOOR_X_AXIS         64
-#define DOOR_Y_AXIS         128
+static constexpr int DOOR_START_OPEN = 1;
+static constexpr int DOOR_CRUSHER = 4;
+static constexpr int DOOR_TOGGLE = 32;
 
 static void door_use_areaportals( edict_t *self, bool open ) {
 	int iopen = open ? 1 : 0;
@@ -266,11 +187,7 @@ void door_go_down( edict_t *self ) {
 	}
 
 	self->moveinfo.state = STATE_DOWN;
-	if( self->classname == "func_door_rotating" ) {
-		AngleMove_Calc( self, self->moveinfo.start_angles, door_hit_bottom );
-	} else {
-		Move_Calc( self, self->moveinfo.start_origin, door_hit_bottom );
-	}
+	Move_Calc( self, self->moveinfo.start_origin, door_hit_bottom );
 }
 
 static void door_go_up( edict_t *self, edict_t *activator ) {
@@ -291,11 +208,7 @@ static void door_go_up( edict_t *self, edict_t *activator ) {
 	self->s.sound = self->moveinfo.sound_middle;
 
 	self->moveinfo.state = STATE_UP;
-	if( self->classname == "func_door_rotating" ) {
-		AngleMove_Calc( self, self->moveinfo.end_angles, door_hit_top );
-	} else {
-		Move_Calc( self, self->moveinfo.end_origin, door_hit_top );
-	}
+	Move_Calc( self, self->moveinfo.end_origin, door_hit_top );
 
 	G_UseTargets( self, activator );
 	door_use_areaportals( self, true );
@@ -442,118 +355,10 @@ void SP_func_door( edict_t * ent, const spawn_temp_t * st ) {
 	}
 }
 
-void SP_func_door_rotating( edict_t * ent, const spawn_temp_t * st ) {
-	G_InitMover( ent );
-
-	ent->s.angles = Vec3( 0.0f );
-
-	// set the axis of rotation
-	ent->moveinfo.movedir = Vec3( 0.0f );
-	if( ent->spawnflags & DOOR_X_AXIS ) {
-		ent->moveinfo.movedir.z = 1.0;
-	} else if( ent->spawnflags & DOOR_Y_AXIS ) {
-		ent->moveinfo.movedir.x = 1.0;
-	} else { // Z_AXIS
-		ent->moveinfo.movedir.y = 1.0;
-	}
-
-	// check for reverse rotation
-	if( ent->spawnflags & DOOR_REVERSE ) {
-		ent->moveinfo.movedir = -ent->moveinfo.movedir;
-	}
-
-	int distance = st->distance != 0 ? st->distance : 90;
-	if( st->distance == 0 ) {
-		Com_GGPrint( "{} at {} with no distance set", ent->classname, ent->s.origin );
-	}
-
-	ent->moveinfo.start_angles = ent->s.angles;
-	ent->moveinfo.end_angles = ent->moveinfo.start_angles + ent->moveinfo.movedir * st->distance;
-	ent->moveinfo.distance = distance;
-
-	ent->moveinfo.blocked = door_blocked;
-	ent->use = door_use;
-
-	if( !ent->speed ) {
-		ent->speed = 100;
-	}
-	if( !ent->wait ) {
-		ent->wait = 3000;
-	}
-	if( !ent->dmg ) {
-		ent->dmg = 2;
-	}
-
-	G_AssignMoverSounds( ent, st, "sounds/movers/door_start", EMPTY_HASH, "sounds/movers/door_close" );
-
-	// if it starts open, switch the positions
-	if( ent->spawnflags & DOOR_START_OPEN ) {
-		ent->s.angles = ent->moveinfo.end_angles;
-		ent->moveinfo.end_angles = ent->moveinfo.start_angles;
-		ent->moveinfo.start_angles = ent->s.angles;
-		ent->moveinfo.movedir = -ent->moveinfo.movedir;
-	}
-
-	ent->moveinfo.state = STATE_BOTTOM;
-	ent->moveinfo.speed = ent->speed;
-	ent->moveinfo.wait = ent->wait;
-	ent->moveinfo.start_origin = ent->s.origin;
-	ent->moveinfo.end_origin = ent->s.origin;
-
-	GClip_LinkEntity( ent );
-
-	if( ent->name == EMPTY_HASH ) {
-		ent->nextThink = level.time + 1;
-		ent->think = Think_SpawnDoorTrigger;
-	}
-}
-
 //====================================================================
 
 #define STATE_STOPPED       0
-#define STATE_ACCEL     1
-#define STATE_FULLSPEED     2
-#define STATE_DECEL     3
-
-static void Think_RotateAccel( edict_t *self ) {
-	if( self->moveinfo.current_speed >= self->speed ) { // has reached full speed
-		// if calculation causes it to go a little over, readjust
-		if( self->moveinfo.current_speed != self->speed ) {
-			self->avelocity = self->moveinfo.movedir * self->speed;
-			self->moveinfo.current_speed = self->speed;
-		}
-
-		self->think = NULL;
-		self->moveinfo.state = STATE_FULLSPEED;
-		return;
-	}
-
-	// if here, some more acceleration needs to be done
-	// add acceleration value to current speed to cause accel
-	self->moveinfo.current_speed += self->accel;
-	self->avelocity = self->moveinfo.movedir * self->moveinfo.current_speed;
-	self->nextThink = level.time + 1;
-}
-
-static void Think_RotateDecel( edict_t *self ) {
-	if( self->moveinfo.current_speed <= 0 ) { // has reached full stop
-		// if calculation cause it to go a little under, readjust
-		if( self->moveinfo.current_speed != 0 ) {
-			self->avelocity = Vec3( 0.0f );
-			self->moveinfo.current_speed = 0;
-		}
-
-		self->think = NULL;
-		self->moveinfo.state = STATE_STOPPED;
-		return;
-	}
-
-	// if here, some more deceleration needs to be done
-	// subtract deceleration value from current speed to cause decel
-	self->moveinfo.current_speed -= self->decel;
-	self->avelocity = self->moveinfo.movedir * self->moveinfo.current_speed;
-	self->nextThink = level.time + 1;
-}
+#define STATE_FULLSPEED     1
 
 static void rotating_blocked( edict_t *self, edict_t *other ) {
 	G_Damage( other, self, self, Vec3( 0.0f ), Vec3( 0.0f ), other->s.origin, self->dmg, 1, 0, WorldDamage_Crush );
@@ -566,34 +371,15 @@ static void rotating_touch( edict_t *self, edict_t *other, Plane *plane, int sur
 }
 
 static void rotating_use( edict_t *self, edict_t *other, edict_t *activator ) {
-	// first, figure out what state we are in
-	if( self->moveinfo.state == STATE_ACCEL || self->moveinfo.state == STATE_FULLSPEED ) {
-		// if decel is 0 then just stop
-		if( self->decel == 0 ) {
-			self->avelocity = Vec3( 0.0f );
-			self->moveinfo.current_speed = 0;
-			self->touch = NULL;
-			self->think = NULL;
-			self->moveinfo.state = STATE_STOPPED;
-		} else {
-			// otherwise decelerate
-			self->think = Think_RotateDecel;
-			self->nextThink = level.time + 1;
-			self->moveinfo.state = STATE_DECEL;
-		} // decelerate
+	if( self->moveinfo.state == STATE_FULLSPEED ) {
+		self->avelocity = Vec3( 0.0f );
+		self->touch = NULL;
+		self->think = NULL;
+		self->moveinfo.state = STATE_STOPPED;
 	} else {
 		self->s.sound = self->moveinfo.sound_middle;
-
-		// check if accel is 0.  If so, just start the rotation
-		if( self->accel == 0 ) {
-			self->avelocity = self->moveinfo.movedir * self->speed;
-			self->moveinfo.state = STATE_FULLSPEED;
-		} else {
-			// accelerate baybee
-			self->think = Think_RotateAccel;
-			self->nextThink = level.time + 1;
-			self->moveinfo.state = STATE_ACCEL;
-		}
+		self->avelocity = self->moveinfo.movedir * self->speed;
+		self->moveinfo.state = STATE_FULLSPEED;
 	}
 
 	// setup touch function if needed
@@ -634,20 +420,6 @@ void SP_func_rotating( edict_t * ent, const spawn_temp_t * st ) {
 	if( !ent->dmg ) {
 		ent->dmg = 2;
 	}
-
-	if( ent->accel < 0 ) { // sanity check
-		ent->accel = 0;
-	} else {
-		ent->accel *= 0.1f;
-	}
-
-	if( ent->decel < 0 ) { // sanity check
-		ent->decel = 0;
-	} else {
-		ent->decel *= 0.1f;
-	}
-
-	ent->moveinfo.current_speed = 0;
 
 	ent->use = rotating_use;
 	if( ent->dmg ) {

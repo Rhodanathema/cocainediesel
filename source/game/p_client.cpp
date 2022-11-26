@@ -73,10 +73,9 @@ static edict_t *CreateCorpse( edict_t *ent, edict_t *attacker, DamageType damage
 	body->s.team = ent->s.team;
 	body->s.scale = ent->s.scale;
 	body->s.svflags = SVF_CORPSE | SVF_BROADCAST;
+	body->s.mask = ent->s.mask;
 	body->activator = ent;
-	if( g_deadbody_followkiller->integer ) {
-		body->enemy = attacker;
-	}
+	body->enemy = attacker;
 
 	//use flat yaw
 	body->s.angles.y = ent->s.angles.y;
@@ -110,9 +109,13 @@ static edict_t *CreateCorpse( edict_t *ent, edict_t *attacker, DamageType damage
 		body->deadflag = DEAD_DEAD;
 	}
 
-	u64 parm = Random64( &svs.rng ) << 1;
+	u64 parm = Random64( &svs.rng ) << 2;
 	if( damage_type == WorldDamage_Void ) {
-		parm |= 1;
+		if( game.edicts[ ENTNUM( ent ) ].r.client->ps.last_touch.type == Weapon_Bat ) {
+			parm |= 0b10;
+		} else {
+			parm |= 0b01;
+		}
 	}
 
 	edict_t * event = G_SpawnEvent( EV_DIE, parm, NULL );
@@ -132,9 +135,19 @@ static edict_t *CreateCorpse( edict_t *ent, edict_t *attacker, DamageType damage
 	return body;
 }
 
+static void ReleaseWeapons( edict_t * ent ) {
+	SyncPlayerState * ps = &ent->r.client->ps;
+
+	if( ps->using_gadget && GetGadgetDef( ps->gadget )->drop_on_death ) {
+		server_gs.api.PredictedUseGadget( ps->POVnum, ps->gadget, ps->weapon_state_time );
+	}
+}
+
 void player_die( edict_t *ent, edict_t *inflictor, edict_t *attacker, int topAssistorEntNo, DamageType damage_type, int damage ) {
 	snap_edict_t snap_backup = ent->snap;
 	client_snapreset_t resp_snap_backup = ent->r.client->resp.snap;
+
+	ReleaseWeapons( ent );
 
 	ent->avelocity = Vec3( 0.0f );
 
@@ -235,8 +248,6 @@ void G_GhostClient( edict_t *ent ) {
 	memset( &ent->snap, 0, sizeof( ent->snap ) );
 	memset( &ent->r.client->resp.snap, 0, sizeof( ent->r.client->resp.snap ) );
 	memset( &ent->r.client->resp.chase, 0, sizeof( ent->r.client->resp.chase ) );
-	ent->r.client->resp.old_waterlevel = 0;
-	ent->r.client->resp.old_watertype = 0;
 
 	ent->s.type = ET_GHOST;
 	ent->s.effects = 0;
@@ -255,7 +266,7 @@ void G_ClientRespawn( edict_t *self, bool ghost ) {
 	self->s.svflags &= ~SVF_NOCLIENT;
 
 	//if invalid be spectator
-	if( self->r.client->team < 0 || self->r.client->team >= Team_Count ) {
+	if( self->r.client->team >= Team_Count ) {
 		self->r.client->team = Team_None;
 	}
 
@@ -292,14 +303,11 @@ void G_ClientRespawn( edict_t *self, bool ghost ) {
 	self->r.inuse = true;
 	self->mass = PLAYER_MASS;
 	self->r.clipmask = MASK_PLAYERSOLID;
-	self->waterlevel = 0;
-	self->watertype = 0;
 	self->s.svflags &= ~SVF_CORPSE;
 	self->enemy = NULL;
 	self->r.owner = NULL;
 	self->max_health = 100;
 	self->health = self->max_health;
-
 
 	if( self->s.svflags & SVF_FAKECLIENT ) {
 		self->classname = "fakeclient";
@@ -324,10 +332,14 @@ void G_ClientRespawn( edict_t *self, bool ghost ) {
 	}
 	else {
 		self->s.type = ET_PLAYER;
+		const char * mask_name = Info_ValueForKey( self->r.client->userinfo, "cg_mask" );
+		if( mask_name != NULL ) {
+			self->s.mask = StringHash( mask_name );
+		}
 		self->s.svflags |= SVF_FORCETEAM;
 		self->r.solid = SOLID_YES;
 		self->movetype = MOVETYPE_PLAYER;
-		client->ps.pmove.features = PMFEAT_ALL & ~PMFEAT_GHOSTMOVE;
+		client->ps.pmove.features = PMFEAT_ALL;
 	}
 
 	ClientUserinfoChanged( self, client->userinfo );
@@ -350,6 +362,11 @@ void G_ClientRespawn( edict_t *self, bool ghost ) {
 		client->ps.viewangles = Vec3( self->s.angles );
 
 		KillBox( self, WorldDamage_Telefrag, Vec3( 0.0f ) );
+
+		edict_t * ev = G_SpawnEvent( EV_RESPAWN, 0, NULL );
+		ev->s.svflags |= SVF_ONLYOWNER | SVF_BROADCAST;
+		ev->s.ownerNum = ENTNUM( self );
+
 	}
 	else {
 		G_ChasePlayer( self );
@@ -736,6 +753,19 @@ void G_PredictedFireWeapon( int entNum, u64 parm ) {
 	event->s.team = ent->s.team;
 }
 
+void G_PredictedAltFireWeapon( int entNum, u64 parm ) {
+	edict_t * ent = &game.edicts[ entNum ];
+	G_AltFireWeapon( ent, parm );
+
+	Vec3 start = ent->s.origin;
+	start.z += ent->r.client->ps.viewheight;
+
+	edict_t * event = G_SpawnEvent( EV_ALTFIREWEAPON, parm, &start );
+	event->s.ownerNum = entNum;
+	event->s.origin2 = ent->r.client->ps.viewangles;
+	event->s.team = ent->s.team;
+}
+
 void G_PredictedUseGadget( int entNum, GadgetType gadget, u64 parm ) {
 	edict_t * ent = &game.edicts[ entNum ];
 	G_UseGadget( ent, gadget, parm );
@@ -865,8 +895,6 @@ void ClientThink( edict_t *ent, UserCommand *ucmd, int timeDelta ) {
 	ent->r.mins = pm.mins;
 	ent->r.maxs = pm.maxs;
 
-	ent->waterlevel = pm.waterlevel;
-	ent->watertype = pm.watertype;
 	if( pm.groundentity == -1 ) {
 		ent->groundentity = NULL;
 	} else {
@@ -903,7 +931,9 @@ void ClientThink( edict_t *ent, UserCommand *ucmd, int timeDelta ) {
 	}
 
 	UpdateWeapons( &server_gs, &client->ps, *ucmd, client->timeDelta );
+	client->ps.flashed -= Min2( client->ps.flashed, u16( ucmd->msec * 0.001f * U16_MAX / 3.0f ) );
 	ent->s.weapon = client->ps.weapon;
+	ent->s.gadget = client->ps.using_gadget ? client->ps.gadget : Gadget_None;
 
 	client->resp.snap.buttons |= ucmd->buttons;
 }
@@ -936,7 +966,7 @@ void G_CheckClientRespawnClick( edict_t *ent ) {
 		constexpr int min_delay = 600;
 		constexpr int max_delay = 6000;
 
-		bool clicked = level.time > ent->deathTimeStamp + min_delay && ( ent->r.client->resp.snap.buttons & BUTTON_ATTACK1 );
+		bool clicked = level.time > ent->deathTimeStamp + min_delay && ( ent->r.client->resp.snap.buttons & Button_Attack1 );
 		bool timeout = level.time > ent->deathTimeStamp + max_delay;
 		if( clicked || timeout ) {
 			G_ClientRespawn( ent, false );
@@ -956,7 +986,7 @@ void G_GivePerk( edict_t * ent, PerkType perk ) {
 	ent->r.client->ps.perk = perk;
 	ent->r.client->ps.pmove.stamina = 1.0f; //max stamina
 	ent->r.client->ps.pmove.stamina_stored = 0.0f;
-	ent->r.client->ps.pmove.stamina_state = Stamina_Normal;
+	ent->r.client->ps.pmove.stamina_state = Stamina_UsedAbility;
 
 	float old_max_health = ent->max_health;
 	ent->s.scale = def->scale;

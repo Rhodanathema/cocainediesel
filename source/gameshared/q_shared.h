@@ -72,6 +72,7 @@ template< size_t N > bool operator!=( const char ( &str )[ N ], Span< const char
 const char * StrChr( Span< const char > str, char c );
 const char * StrRChr( Span< const char > str, char c );
 
+bool StartsWith( Span< const char > str, Span< const char > prefix );
 bool StartsWith( Span< const char > str, const char * prefix );
 bool StartsWith( const char * str, const char * prefix );
 bool EndsWith( Span< const char > str, const char * suffix );

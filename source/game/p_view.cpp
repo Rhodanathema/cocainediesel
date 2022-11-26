@@ -159,75 +159,16 @@ void G_ClientDamageFeedback( edict_t *ent ) {
 	}
 }
 
-static void G_PlayerWorldEffects( edict_t *ent ) {
-	int waterlevel, old_waterlevel;
-	int watertype, old_watertype;
+void G_ClientSetStats( edict_t * ent ) {
+	gclient_t * client = ent->r.client;
+	SyncPlayerState * ps = &client->ps;
 
-	if( ent->movetype == MOVETYPE_NOCLIP ) {
-		return;
-	}
-
-	waterlevel = ent->waterlevel;
-	watertype = ent->watertype;
-	old_waterlevel = ent->r.client->resp.old_waterlevel;
-	old_watertype = ent->r.client->resp.old_watertype;
-	ent->r.client->resp.old_waterlevel = waterlevel;
-	ent->r.client->resp.old_watertype = watertype;
-
-	//
-	// if just entered a water volume, play a sound
-	//
-	if( !old_waterlevel && waterlevel ) {
-		if( ent->watertype & CONTENTS_LAVA ) {
-			G_Sound( ent, "sounds/world/lava_in" );
-		} else if( ent->watertype & CONTENTS_SLIME ) {
-			G_Sound( ent, "sounds/world/water_in" );
-		} else if( ent->watertype & CONTENTS_WATER ) {
-			G_Sound( ent, "sounds/world/water_in" );
-		}
-	}
-
-	//
-	// if just completely exited a water volume, play a sound
-	//
-	if( old_waterlevel && !waterlevel ) {
-		if( old_watertype & CONTENTS_LAVA ) {
-			G_Sound( ent, "sounds/world/lava_out" );
-		} else if( old_watertype & CONTENTS_SLIME ) {
-			G_Sound( ent, "sounds/world/water_out" );
-		} else if( old_watertype & CONTENTS_WATER ) {
-			G_Sound( ent, "sounds/world/water_out" );
-		}
-	}
-
-	//
-	// check for sizzle damage
-	//
-	if( waterlevel && ( ent->watertype & ( CONTENTS_LAVA | CONTENTS_SLIME ) ) ) {
-		if( ent->watertype & CONTENTS_LAVA ) {
-			G_Damage( ent, world, world, Vec3( 0.0f ), Vec3( 0.0f ), ent->s.origin,
-					  ( 30 * waterlevel ) * game.snapFrameTime / 1000.0f, 0, 0, WorldDamage_Lava );
-		}
-
-		if( ent->watertype & CONTENTS_SLIME ) {
-			G_Damage( ent, world, world, Vec3( 0.0f ), Vec3( 0.0f ), ent->s.origin,
-					  ( 10 * waterlevel ) * game.snapFrameTime / 1000.0f, 0, 0, WorldDamage_Slime );
-		}
-	}
-}
-
-static void G_SetClientSound( edict_t *ent ) {
-	if( ent->waterlevel == 3 ) {
-		if( ent->watertype & CONTENTS_LAVA ) {
-			ent->s.sound = "sounds/world/underwater";
-		} else if( ent->watertype & CONTENTS_SLIME ) {
-			ent->s.sound = "sounds/world/underwater";
-		} else if( ent->watertype & CONTENTS_WATER ) {
-			ent->s.sound = "sounds/world/underwater";
-		}
-	} else {
-		ent->s.sound = EMPTY_HASH;
-	}
+	ps->ready = server_gs.gameState.match_state <= MatchState_Warmup && level.ready[ PLAYERNUM( ent ) ];
+	ps->voted = G_Callvotes_HasVoted( ent );
+	ps->team = ent->s.team;
+	ps->real_team = ent->s.team;
+	ps->health = ent->s.team == Team_None ? 0 : HEALTH_TO_INT( ent->health );
+	ps->max_health = HEALTH_TO_INT( ent->max_health );
 }
 
 /*
@@ -246,16 +187,14 @@ void G_ClientEndSnapFrame( edict_t *ent ) {
 	// If the end of unit layout is displayed, don't give
 	// the player any normal movement attributes
 	if( server_gs.gameState.match_state >= MatchState_PostMatch ) {
-		G_SetClientStats( ent );
+		G_ClientSetStats( ent );
 	} else {
 		if( G_IsDead( ent ) ) {
 			G_Client_DeadView( ent );
 		}
 
-		G_PlayerWorldEffects( ent ); // burn from lava, etc
 		G_ClientDamageFeedback( ent ); // show damage taken along the snap
-		G_SetClientStats( ent );
-		G_SetClientSound( ent );
+		G_ClientSetStats( ent );
 	}
 
 	G_ReleaseClientPSEvent( client );

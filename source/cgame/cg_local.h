@@ -106,8 +106,7 @@ struct centity_t {
 #include "cgame/cg_pmodels.h"
 
 struct cgs_media_t {
-	StringHash sfxWeaponHit[ 4 ];
-	StringHash sfxVSaySounds[ Vsay_Total ];
+	StringHash sfxVSaySounds[ Vsay_Count ];
 
 	StringHash shaderWeaponIcon[ Weapon_Count ];
 	StringHash shaderGadgetIcon[ Gadget_Count ];
@@ -271,12 +270,12 @@ extern Cvar *cg_showMiss;
 
 void CG_PredictedEvent( int entNum, int ev, u64 parm );
 void CG_PredictedFireWeapon( int entNum, u64 parm );
+void CG_PredictedAltFireWeapon( int entNum, u64 parm );
 void CG_PredictedUseGadget( int entNum, GadgetType gadget, u64 parm );
 void CG_PredictMovement();
 void CG_CheckPredictionError();
 void CG_BuildSolidList();
 void CG_Trace( trace_t *t, Vec3 start, Vec3 mins, Vec3 maxs, Vec3 end, int ignore, int contentmask );
-int CG_PointContents( Vec3 point );
 void CG_Predict_TouchTriggers( pmove_t *pm, Vec3 previous_origin );
 
 //
@@ -303,8 +302,8 @@ void CG_InitDamageNumbers();
 void CG_AddDamageNumber( SyncEntityState * ent, u64 parm );
 void CG_DrawDamageNumbers( float obi_size, float dmg_size );
 
-void CG_AddBomb( centity_t * cent );
-void CG_AddBombSite( centity_t * cent );
+void CG_AddBombIndicator( const centity_t * cent );
+void CG_AddBombSiteIndicator( const centity_t * cent );
 void CG_DrawBombHUD( int name_size, int goal_size, int bomb_msg_size );
 void CG_ResetBombHUD();
 
@@ -331,6 +330,7 @@ bool CG_ScoreboardShown();
 // cg_main.c
 //
 extern Cvar *cg_showClamp;
+extern Cvar *cg_mask;
 
 // wsw
 extern Cvar *cg_projectileAntilagOffset;
@@ -379,7 +379,6 @@ struct ChasecamState {
 extern ChasecamState chaseCam;
 
 extern Cvar *cg_thirdPerson;
-extern Cvar *cg_thirdPersonAngle;
 extern Cvar *cg_thirdPersonRange;
 
 void CG_StartFallKickEffect( int bounceTime );
@@ -391,6 +390,8 @@ bool CG_ChaseStep( int step );
 
 float WidescreenFov( float fov );
 float CalcHorizontalFov( const char * caller, float fov_y, float width, float height );
+
+void MaybeResetShadertoyTime( bool respawned );
 
 //
 // cg_lents.c
@@ -456,8 +457,8 @@ void CG_InitInput();
 void CG_ShutdownInput();
 void CG_ClearInputState();
 void CG_MouseMove( Vec2 m );
-u8 CG_GetButtonBits();
-u8 CG_GetButtonDownEdges();
+UserCommandButton CG_GetButtonBits();
+UserCommandButton CG_GetButtonDownEdges();
 Vec3 CG_GetDeltaViewAngles();
 Vec2 CG_GetMovement();
 

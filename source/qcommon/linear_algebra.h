@@ -82,6 +82,7 @@ inline Vec3 operator/( float x, Vec3 v ) { return Vec3( x / v.x, x / v.y, x / v.
 
 inline void operator+=( Vec3 & lhs, Vec3 rhs ) { lhs = lhs + rhs; }
 inline void operator-=( Vec3 & lhs, Vec3 rhs ) { lhs = lhs - rhs; }
+inline void operator*=( Vec3 & lhs, Vec3 rhs ) { lhs = lhs * rhs; }
 
 inline void operator+=( Vec3 & v, float x ) { v = v + x; }
 inline void operator-=( Vec3 & v, float x ) { v = v - x; }
@@ -129,6 +130,14 @@ inline Vec3 Floor( Vec3 v ) {
 		floorf( v.x ),
 		floorf( v.y ),
 		floorf( v.z )
+	);
+}
+
+inline Vec3 Clamp( Vec3 lo, Vec3 v, Vec3 hi ) {
+	return Vec3(
+		Clamp( lo.x, v.x, hi.x ),
+		Clamp( lo.y, v.y, hi.y ),
+		Clamp( lo.z, v.z, hi.z )
 	);
 }
 
@@ -205,25 +214,6 @@ inline Vec4 Clamp( Vec4 lo, Vec4 v, Vec4 hi ) {
 		Clamp( lo.y, v.y, hi.y ),
 		Clamp( lo.z, v.z, hi.z ),
 		Clamp( lo.w, v.w, hi.w )
-	);
-}
-
-/*
- * Mat2
- */
-
-inline Mat2 Mat2Rotation( float c, float s ) {
-	return Mat2( c, -s, s, c );
-}
-
-inline Mat2 Mat2Rotation( float theta ) {
-	return Mat2Rotation( cosf( Radians( theta ) ), sinf( Radians( theta ) ) );
-}
-
-inline Vec2 operator*( const Mat2 & m, const Vec2 & v ) {
-	return Vec2(
-		Dot( m.row0(), v ),
-		Dot( m.row1(), v )
 	);
 }
 

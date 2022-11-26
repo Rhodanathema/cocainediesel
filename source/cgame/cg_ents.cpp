@@ -678,25 +678,25 @@ void DrawEntities() {
 			case ET_ROCKET:
 				DrawEntityModel( cent );
 				DrawEntityTrail( cent, "weapons/rl/trail" );
-				DrawDynamicLight( cent->interpolated.origin, CG_TeamColorVec4( cent->current.team ), 25600.0f );
+				DrawDynamicLight( cent->interpolated.origin, CG_TeamColorVec4( cent->current.team ).xyz(), 25600.0f );
 				CG_EntityLoopSound( cent, state );
 				break;
 			case ET_GRENADE:
 				DrawEntityModel( cent );
 				DrawEntityTrail( cent, "weapons/gl/trail" );
-				DrawDynamicLight( cent->interpolated.origin, CG_TeamColorVec4( cent->current.team ), 6400.0f );
+				DrawDynamicLight( cent->interpolated.origin, CG_TeamColorVec4( cent->current.team ).xyz(), 6400.0f );
 				CG_EntityLoopSound( cent, state );
 				break;
 			case ET_ARBULLET:
 				DrawEntityModel( cent );
 				DrawEntityTrail( cent, "weapons/ar/trail" );
-				DrawDynamicLight( cent->interpolated.origin, CG_TeamColorVec4( cent->current.team ), 6400.0f );
+				DrawDynamicLight( cent->interpolated.origin, CG_TeamColorVec4( cent->current.team ).xyz(), 6400.0f );
 				CG_EntityLoopSound( cent, state );
 				break;
 			case ET_BUBBLE:
 				DrawEntityModel( cent );
 				DrawEntityTrail( cent, "weapons/bg/trail" );
-				DrawDynamicLight( cent->interpolated.origin, CG_TeamColorVec4( cent->current.team ), 6400.0f );
+				DrawDynamicLight( cent->interpolated.origin, CG_TeamColorVec4( cent->current.team ).xyz(), 6400.0f );
 				CG_EntityLoopSound( cent, state );
 				break;
 			case ET_RIFLEBULLET:
@@ -711,7 +711,7 @@ void DrawEntities() {
 				break;
 			case ET_BLAST:
 				DrawEntityTrail( cent, "weapons/mb/trail" );
-				DrawDynamicLight( cent->interpolated.origin, CG_TeamColorVec4( cent->current.team ), 3200.0f );
+				DrawDynamicLight( cent->interpolated.origin, CG_TeamColorVec4( cent->current.team ).xyz(), 3200.0f );
 				CG_EntityLoopSound( cent, state );
 				break;
 			case ET_THROWING_AXE:
@@ -754,11 +754,11 @@ void DrawEntities() {
 				break;
 
 			case ET_BOMB:
-				CG_AddBomb( cent );
+				CG_AddBombIndicator( cent );
 				break;
 
 			case ET_BOMB_SITE:
-				CG_AddBombSite( cent );
+				CG_AddBombSiteIndicator( cent );
 				break;
 
 			case ET_LASER: {
@@ -883,6 +883,7 @@ void CG_UpdateEntities() {
 			case ET_RIFLEBULLET:
 			case ET_STAKE:
 			case ET_BLAST:
+			case ET_RAILALT:
 			case ET_THROWING_AXE:
 				break;
 

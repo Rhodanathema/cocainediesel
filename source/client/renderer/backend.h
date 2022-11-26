@@ -251,7 +251,6 @@ struct MeshConfig {
 	GPUBuffer indices = { };
 	u32 num_vertices = 0;
 
-	PrimitiveType primitive_type = PrimitiveType_Triangles;
 	bool ccw_winding = true;
 };
 
@@ -288,11 +287,11 @@ enum RenderPassType {
 };
 
 struct RenderPass {
-	const char * name = NULL;
-
 	RenderPassType type;
 
 	Framebuffer target = { };
+
+	bool barrier = false;
 
 	bool clear_color = false;
 	Vec4 color = Vec4( 0 );
@@ -323,12 +322,12 @@ void ShutdownRenderBackend();
 void RenderBackendBeginFrame();
 void RenderBackendSubmitFrame();
 
-u8 AddRenderPass( const RenderPass & config );
-u8 AddRenderPass( const char * name, const tracy::SourceLocationData * tracy, ClearColor clear_color = ClearColor_Dont, ClearDepth clear_depth = ClearDepth_Dont );
-u8 AddRenderPass( const char * name, const tracy::SourceLocationData * tracy, Framebuffer target, ClearColor clear_color = ClearColor_Dont, ClearDepth clear_depth = ClearDepth_Dont );
-u8 AddUnsortedRenderPass( const char * name, const tracy::SourceLocationData * tracy, Framebuffer target = { } );
-void AddBlitPass( const char * name, const tracy::SourceLocationData * tracy, Framebuffer src, Framebuffer dst, ClearColor clear_color = ClearColor_Dont, ClearDepth clear_depth = ClearDepth_Dont );
-void AddResolveMSAAPass( const char * name, const tracy::SourceLocationData * tracy, Framebuffer src, Framebuffer dst, ClearColor clear_color = ClearColor_Dont, ClearDepth clear_depth = ClearDepth_Dont );
+u8 AddRenderPass( const tracy::SourceLocationData * tracy, ClearColor clear_color = ClearColor_Dont, ClearDepth clear_depth = ClearDepth_Dont );
+u8 AddRenderPass( const tracy::SourceLocationData * tracy, Framebuffer target, ClearColor clear_color = ClearColor_Dont, ClearDepth clear_depth = ClearDepth_Dont );
+u8 AddUnsortedRenderPass( const tracy::SourceLocationData * tracy, Framebuffer target = { } );
+u8 AddBarrierRenderPass( const tracy::SourceLocationData * tracy, Framebuffer target = { } );
+void AddBlitPass( const tracy::SourceLocationData * tracy, Framebuffer src, Framebuffer dst, ClearColor clear_color = ClearColor_Dont, ClearDepth clear_depth = ClearDepth_Dont );
+void AddResolveMSAAPass( const tracy::SourceLocationData * tracy, Framebuffer src, Framebuffer dst, ClearColor clear_color = ClearColor_Dont, ClearDepth clear_depth = ClearDepth_Dont );
 
 UniformBlock UploadUniforms( const void * data, size_t size );
 
@@ -366,8 +365,8 @@ Framebuffer NewFramebuffer( Texture * albedo_texture, Texture * normal_texture, 
 Framebuffer NewShadowFramebuffer( TextureArray texture_array, u32 layer );
 void DeleteFramebuffer( Framebuffer fb );
 
-bool NewShader( Shader * shader, Span< Span< const char > > srcs, bool particle_vertex_attribs = false );
-bool NewComputeShader( Shader * shader, Span< Span< const char > > srcs );
+bool NewShader( Shader * shader, const char * src, const char * name );
+bool NewComputeShader( Shader * shader, const char * src, const char * name );
 void DeleteShader( Shader shader );
 
 Mesh NewMesh( MeshConfig config );
@@ -380,7 +379,7 @@ void DrawInstancedMesh( const Mesh & mesh, const PipelineState & pipeline, GPUBu
 void DispatchCompute( const PipelineState & pipeline, u32 x, u32 y, u32 z );
 void DispatchComputeIndirect( const PipelineState & pipeline, GPUBuffer indirect );
 
-void DrawElementsIndirect( const Mesh & mesh, const PipelineState & pipeline, GPUBuffer instance_data, GPUBuffer indirect );
+void DrawInstancedParticles( const Mesh & mesh, const PipelineState & pipeline, GPUBuffer indirect );
 
 void DownloadFramebuffer( void * buf );
 

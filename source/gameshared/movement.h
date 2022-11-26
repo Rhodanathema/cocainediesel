@@ -30,7 +30,6 @@ struct pml_t {
 
 	float groundAccel;
 	float airAccel;
-	float waterAccel;
 	float strafeBunnyAccel;
 
 	float friction;
@@ -49,7 +48,7 @@ constexpr float SLIDEMOVE_PLANEINTERACT_EPSILON = 0.05f;
 
 //shared
 float Normalize2D( Vec3 * v );
-void PlayerTouchWall( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_gs, int nbTestDir, float maxZnormal, Vec3 * normal );
+void PlayerTouchWall( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_gs, int nbTestDir, float maxZnormal, Vec3 * normal, bool z );
 
 bool StaminaAvailable( SyncPlayerState * ps, pml_t * pml, float need );
 bool StaminaAvailableImmediate( SyncPlayerState * ps, float need );
@@ -57,13 +56,11 @@ void StaminaUse( SyncPlayerState * ps, pml_t * pml, float use );
 void StaminaUseImmediate( SyncPlayerState * ps, float use );
 void StaminaRecover( SyncPlayerState * ps, pml_t * pml, float recover );
 
-float JumpVelocity( pmove_t * pm, float vel );
-
 void PM_InitPerk( pmove_t * pm, pml_t * pml, PerkType perk,
 				void (*ability1Callback)( pmove_t *, pml_t *, const gs_state_t *, SyncPlayerState *, bool ),
 				void (*ability2Callback)( pmove_t *, pml_t *, const gs_state_t *, SyncPlayerState *, bool ) );
 
-void Jump( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_gs, SyncPlayerState * ps, float jumpspeed, JumpType j, bool addvel );
+void Jump( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_gs, SyncPlayerState * ps, float jumpspeed, bool addvel );
 void Dash( pmove_t * pm, pml_t * pml, const gs_state_t * pmove_gs, Vec3 dashdir, float dash_speed, float dash_upspeed );
 
 //pmove_ files

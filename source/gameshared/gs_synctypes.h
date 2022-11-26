@@ -37,6 +37,7 @@ enum EntityType : u8 {
 	ET_GRENADE,
 	ET_ARBULLET,
 	ET_BUBBLE,
+	ET_RAILALT,
 	ET_RIFLEBULLET,
 	ET_STAKE,
 	ET_BLAST,
@@ -61,7 +62,14 @@ enum EntityType : u8 {
 	EntityType_Count
 };
 
+enum DamageCategory {
+	DamageCategory_Weapon,
+	DamageCategory_Gadget,
+	DamageCategory_World,
+};
+
 enum WeaponCategory {
+	WeaponCategory_Melee,
 	WeaponCategory_Primary,
 	WeaponCategory_Secondary,
 	WeaponCategory_Backup,
@@ -73,6 +81,7 @@ enum WeaponType : u8 {
 	Weapon_None,
 
 	Weapon_Knife,
+	Weapon_Bat,
 	Weapon_Pistol,
 	Weapon_MachineGun,
 	Weapon_Deagle,
@@ -109,6 +118,31 @@ enum GadgetType : u8 {
 };
 
 void operator++( GadgetType & x, int );
+
+enum WorldDamage : u8 {
+	WorldDamage_Crush,
+	WorldDamage_Telefrag,
+	WorldDamage_Suicide,
+	WorldDamage_Explosion,
+
+	WorldDamage_Trigger,
+
+	WorldDamage_Laser,
+	WorldDamage_Spike,
+	WorldDamage_Void,
+};
+
+struct DamageType {
+	u8 encoded;
+
+	DamageType() = default;
+	DamageType( WeaponType weapon );
+	DamageType( GadgetType gadget );
+	DamageType( WorldDamage world );
+};
+
+bool operator==( DamageType a, DamageType b );
+bool operator!=( DamageType a, DamageType b );
 
 enum PerkType : u8 {
 	Perk_None,
@@ -236,9 +270,6 @@ struct SyncBombGameState {
 	u8 alpha_players_total;
 	u8 beta_players_alive;
 	u8 beta_players_total;
-
-	bool exploding;
-	s64 exploded_at;
 };
 
 struct SyncGameState {
@@ -265,6 +296,8 @@ struct SyncGameState {
 	u32 map_checksum;
 
 	SyncBombGameState bomb;
+	bool exploding;
+	s64 exploded_at;
 };
 
 struct SyncEvent {
@@ -286,6 +319,7 @@ struct SyncEntityState {
 
 	StringHash model;
 	StringHash model2;
+	StringHash mask;
 
 	bool animating;
 	float animation_time;
@@ -317,6 +351,7 @@ struct SyncEntityState {
 	int linearMovementTimeDelta;
 
 	WeaponType weapon;
+	GadgetType gadget;
 	bool teleported;
 	Vec3 scale;
 
@@ -341,8 +376,11 @@ struct pmove_state_t {
 	s16 no_shooting_time;
 
 	s16 knockback_time;
+	s16 jumppad_time;
+
 	float stamina;
 	float stamina_stored;
+	float jump_buffering;
 	StaminaState stamina_state;
 
 	s16 max_speed;
@@ -351,6 +389,11 @@ struct pmove_state_t {
 struct WeaponSlot {
 	WeaponType weapon;
 	u8 ammo;
+};
+
+struct TouchInfo {
+	int entnum;
+	DamageType type;
 };
 
 struct SyncPlayerState {
@@ -379,6 +422,8 @@ struct SyncPlayerState {
 	s16 max_health;
 	u16 flashed;
 
+	TouchInfo last_touch;
+
 	WeaponState weapon_state;
 	u16 weapon_state_time;
 	s16 zoom_time;
@@ -396,14 +441,23 @@ struct SyncPlayerState {
 
 	BombProgress progress_type;
 	u8 progress;
-
-	int pointed_player;
-	int pointed_health;
 };
+
+enum UserCommandButton : u8 {
+	Button_Attack1 = 1 << 0,
+	Button_Attack2 = 1 << 1,
+	Button_Ability1 = 1 << 2,
+	Button_Ability2 = 1 << 3,
+	Button_Reload = 1 << 4,
+	Button_Gadget = 1 << 5,
+	Button_Plant = 1 << 6,
+};
+
+void operator|=( UserCommandButton & lhs, UserCommandButton rhs );
 
 struct UserCommand {
 	u8 msec;
-	u8 buttons, down_edges;
+	UserCommandButton buttons, down_edges;
 	u16 entropy;
 	s64 serverTimeStamp;
 	s16 angles[ 3 ];

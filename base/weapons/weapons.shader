@@ -9,6 +9,17 @@ weapons/9mm/texture
 	}
 }
 
+weapons/bat/texture
+{
+	shaded
+	specular 10
+	shininess 8
+	{
+		map $whiteimage
+		rgbGen const 0.18 0.18 0.18
+	}
+}
+
 weapons/br/texture
 {
 	shaded
@@ -53,7 +64,7 @@ weapons/eb/texture
 	}
 }
 
-weapons/gb/texture
+weapons/knife/texture
 {
 	shaded
 	specular 10

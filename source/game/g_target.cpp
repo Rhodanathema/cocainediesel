@@ -48,7 +48,7 @@ static void target_laser_think( edict_t *self ) {
 	edict_t *ignore = self;
 	Vec3 start = self->s.origin;
 	Vec3 end = start + self->moveinfo.movedir * 2048.0f;
-	while( 1 ) {
+	while( true ) {
 		G_Trace( &tr, start, Vec3( 0.0f ), Vec3( 0.0f ), end, ignore, MASK_SHOT );
 		if( tr.fraction == 1 ) {
 			break;
@@ -152,26 +152,3 @@ void SP_target_laser( edict_t * ent, const spawn_temp_t * st ) {
 }
 
 void SP_target_position( edict_t * self, const spawn_temp_t * st ) { }
-
-static void target_delay_think( edict_t * ent ) {
-	G_UseTargets( ent, ent->activator );
-}
-
-static void target_delay_use( edict_t *ent, edict_t *other, edict_t *activator ) {
-	ent->nextThink = level.time + ent->wait + ent->wait_randomness * RandomFloat11( &svs.rng );
-	ent->think = target_delay_think;
-	ent->activator = activator;
-}
-
-void SP_target_delay( edict_t * ent, const spawn_temp_t * st ) {
-	// check the "delay" key for backwards compatibility with Q3 maps
-	if( ent->delay ) {
-		ent->wait = ent->delay;
-	}
-	if( !ent->wait ) {
-		ent->wait = 1000;
-	}
-
-	ent->delay = 0;
-	ent->use = target_delay_use;
-}

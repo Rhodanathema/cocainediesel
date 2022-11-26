@@ -64,13 +64,6 @@ void Con_ToggleConsole() {
 		return;
 	}
 
-	if( console.visible ) {
-		CL_SetKeyDest( key_game );
-	}
-	else {
-		CL_SetKeyDest( key_ImGui );
-	}
-
 	Con_ClearInput();
 
 	console.scroll_to_bottom = true;
@@ -301,7 +294,7 @@ void Con_Draw() {
 	// make a fullscreen window so you can't interact with menus while console is open
 	ImGui::SetNextWindowPos( ImVec2() );
 	ImGui::SetNextWindowSize( ImVec2( frame_static.viewport_width, frame_static.viewport_height ) );
-	ImGui::Begin( "console", WindowZOrder_Console, ImGuiWindowFlags_NoDecoration );
+	ImGui::Begin( "console", WindowZOrder_Console, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_Interactive );
 
 	{
 		ImGui::PushStyleColor( ImGuiCol_ChildBg, bg );

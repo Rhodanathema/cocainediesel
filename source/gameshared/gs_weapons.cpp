@@ -150,7 +150,7 @@ static void HandleZoom( const gs_state_t * gs, SyncPlayerState * ps, const UserC
 	s16 last_zoom_time = ps->zoom_time;
 	bool can_zoom = ( ps->weapon_state == WeaponState_Idle || ( ps->weapon_state == WeaponState_Firing && HasAmmo( def, slot ) ) ) && ( ps->pmove.features & PMFEAT_SCOPE );
 
-	if( can_zoom && def->zoom_fov != 0 && ( cmd->buttons & BUTTON_ATTACK2 ) != 0 ) {
+	if( can_zoom && def->zoom_fov != 0 && ( cmd->buttons & Button_Attack2 ) != 0 ) {
 		ps->zoom_time = Min2( ps->zoom_time + cmd->msec, ZOOMTIME );
 		if( last_zoom_time == 0 ) {
 			gs->api.PredictedEvent( ps->POVnum, EV_ZOOM_IN, ps->weapon );
@@ -262,7 +262,7 @@ static ItemState generic_gun_states[] = {
 		const WeaponDef * def = GS_GetWeaponDef( ps->weapon );
 		WeaponSlot * slot = GetSelectedWeapon( ps );
 
-		if( cmd->buttons & BUTTON_ATTACK1 ) {
+		if( cmd->buttons & Button_Attack1 ) {
 			if( HasAmmo( def, slot ) ) {
 				FireWeapon( gs, ps, cmd, false );
 
@@ -275,7 +275,7 @@ static ItemState generic_gun_states[] = {
 			}
 		}
 
-		bool wants_reload = ( cmd->buttons & BUTTON_RELOAD ) && def->clip_size != 0 && slot->ammo < def->clip_size;
+		bool wants_reload = ( cmd->buttons & Button_Reload ) && def->clip_size != 0 && slot->ammo < def->clip_size;
 		if( wants_reload || !HasAmmo( def, slot ) ) {
 			return WeaponState_Reloading;
 		}
@@ -284,7 +284,7 @@ static ItemState generic_gun_states[] = {
 	} ),
 
 	ItemState( WeaponState_FiringSemiAuto, []( const gs_state_t * gs, WeaponState state, SyncPlayerState * ps, const UserCommand * cmd ) -> ItemStateTransition {
-		if( cmd->buttons & BUTTON_ATTACK1 ) {
+		if( cmd->buttons & Button_Attack1 ) {
 			const WeaponDef * def = GS_GetWeaponDef( ps->weapon );
 			ps->weapon_state_time = Min2( def->refire_time, ps->weapon_state_time );
 
@@ -306,7 +306,7 @@ static ItemState generic_gun_states[] = {
 
 		WeaponSlot * slot = GetSelectedWeapon( ps );
 
-		if( ( cmd->buttons & BUTTON_ATTACK1 ) == 0 || slot->ammo == 0 ) {
+		if( ( cmd->buttons & Button_Attack1 ) == 0 || slot->ammo == 0 ) {
 			return WeaponState_Idle;
 		}
 
@@ -364,7 +364,7 @@ static ItemState generic_gun_states[] = {
 		const WeaponDef * def = GS_GetWeaponDef( ps->weapon );
 		WeaponSlot * slot = GetSelectedWeapon( ps );
 
-		if( ( cmd->buttons & BUTTON_ATTACK1 ) != 0 && HasAmmo( def, slot ) ) {
+		if( ( cmd->buttons & Button_Attack1 ) != 0 && HasAmmo( def, slot ) ) {
 			return WeaponState_Idle;
 		}
 
@@ -384,7 +384,27 @@ static ItemState railgun_states[] = {
 	generic_gun_refire_state,
 
 	ItemState( WeaponState_Idle, []( const gs_state_t * gs, WeaponState state, SyncPlayerState * ps, const UserCommand * cmd ) -> ItemStateTransition {
-		if( cmd->buttons & BUTTON_ATTACK1 ) {
+		if( cmd->buttons & Button_Attack1 ) {
+			gs->api.PredictedFireWeapon( ps->POVnum, Weapon_Railgun );
+			return WeaponState_Firing;
+		}
+
+		if( cmd->buttons & Button_Attack2 ) {
+			gs->api.PredictedAltFireWeapon( ps->POVnum, Weapon_Railgun );
+			return WeaponState_Firing;
+		}
+
+		return AllowWeaponSwitch( gs, ps, WeaponState_Idle );
+	} ),
+};
+
+static const ItemState bat_states[] = {
+	generic_gun_switching_in_state,
+	generic_gun_switching_out_state,
+	generic_gun_refire_state,
+
+	ItemState( WeaponState_Idle, []( const gs_state_t * gs, WeaponState state, SyncPlayerState * ps, const UserCommand * cmd ) -> ItemStateTransition {
+		if( cmd->buttons & Button_Attack1 ) {
 			return WeaponState_Cooking;
 		}
 
@@ -392,9 +412,10 @@ static ItemState railgun_states[] = {
 	} ),
 
 	ItemState( WeaponState_Cooking, []( const gs_state_t * gs, WeaponState state, SyncPlayerState * ps, const UserCommand * cmd ) -> ItemStateTransition {
-		const WeaponDef * def = GS_GetWeaponDef( Weapon_Railgun );
-		if( ( cmd->buttons & BUTTON_ATTACK1 ) == 0 && ps->weapon_state_time >= def->reload_time ) {
-			gs->api.PredictedFireWeapon( ps->POVnum, Weapon_Railgun );
+		const WeaponDef * def = GS_GetWeaponDef( ps->weapon );
+
+		if( !( cmd->buttons & Button_Attack1 ) ) {
+			gs->api.PredictedFireWeapon( ps->POVnum, ps->weapon );
 			return WeaponState_Firing;
 		}
 
@@ -411,7 +432,7 @@ static const ItemState generic_throwable_states[] = {
 	} ),
 
 	ItemState( WeaponState_Cooking, []( const gs_state_t * gs, WeaponState state, SyncPlayerState * ps, const UserCommand * cmd ) -> ItemStateTransition {
-		if( ( cmd->buttons & BUTTON_GADGET ) == 0 ) {
+		if( ( cmd->buttons & Button_Gadget ) == 0 ) {
 			gs->api.PredictedUseGadget( ps->POVnum, ps->gadget, ps->weapon_state_time );
 			ps->gadget_ammo--;
 			return WeaponState_Throwing;
@@ -486,6 +507,7 @@ static const ItemState suicide_bomb_states[] = {
 
 constexpr static Span< const ItemState > dispatch_state_machine = MakeStateMachine( dispatch_states );
 constexpr static Span< const ItemState > generic_gun_state_machine = MakeStateMachine( generic_gun_states );
+constexpr static Span< const ItemState > bat_state_machine = MakeStateMachine( bat_states );
 constexpr static Span< const ItemState > railgun_state_machine = MakeStateMachine( railgun_states );
 constexpr static Span< const ItemState > generic_throwable_state_machine = MakeStateMachine( generic_throwable_states );
 constexpr static Span< const ItemState > suicide_bomb_state_machine = MakeStateMachine( suicide_bomb_states );
@@ -508,11 +530,14 @@ static Span< const ItemState > FindItemStateMachine( SyncPlayerState * ps ) {
 		}
 	}
 
-	if( ps->weapon == Weapon_Railgun ) {
-		return railgun_state_machine;
+	switch( ps->weapon ) {
+		case Weapon_Bat:
+			return bat_state_machine;
+		case Weapon_Railgun:
+			return railgun_state_machine;
+		default:
+			return generic_gun_state_machine;
 	}
-
-	return generic_gun_state_machine;
 }
 
 static const ItemState * FindState( Span< const ItemState > sm, WeaponState state ) {
@@ -561,16 +586,16 @@ void UpdateWeapons( const gs_state_t * gs, SyncPlayerState * ps, UserCommand cmd
 	}
 
 	if( ps->pmove.no_shooting_time > 0 ) {
-		cmd.buttons = cmd.buttons & ~BUTTON_ATTACK1;
-		cmd.buttons = cmd.buttons & ~BUTTON_GADGET;
+		cmd.buttons = UserCommandButton( cmd.buttons & ~Button_Attack1 );
+		cmd.buttons = UserCommandButton( cmd.buttons & ~Button_Attack2 );
+		cmd.buttons = UserCommandButton( cmd.buttons & ~Button_Gadget );
 	}
 
-	if( ( cmd.buttons & BUTTON_GADGET ) != 0 && ( cmd.down_edges & BUTTON_GADGET ) != 0 ) {
+	if( ( cmd.buttons & Button_Gadget ) != 0 && ( cmd.down_edges & Button_Gadget ) != 0 ) {
 		ps->pending_gadget = true;
 	}
 
 	HandleZoom( gs, ps, &cmd );
-	ps->flashed -= Min2( ps->flashed, u16( cmd.msec * 0.001f * U16_MAX / 3.0f ) );
 
 	while( true ) {
 		Span< const ItemState > sm = FindItemStateMachine( ps );

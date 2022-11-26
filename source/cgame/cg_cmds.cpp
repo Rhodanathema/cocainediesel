@@ -251,7 +251,7 @@ static void ScrollWeapon( int step ) {
 		return;
 
 	WeaponType weapon = ps->weapons[ slot ].weapon;
-	if( weapon != Weapon_None && weapon != Weapon_Knife ) {
+	if( weapon != Weapon_None && GS_GetWeaponDef( weapon )->category != WeaponCategory_Melee ) {
 		SwitchWeapon( weapon );
 	}
 }
@@ -271,7 +271,11 @@ static void CG_Cmd_PrevWeapon_f() {
 		return;
 	}
 
-	ScrollWeapon( -1 );
+	if( GS_GetWeaponDef( cg.predictedPlayerState.weapon )->category == WeaponCategory_Melee ) {
+		SwitchWeapon( cg.predictedPlayerState.last_weapon );
+	} else {
+		ScrollWeapon( -1 );
+	}
 }
 
 static void CG_Cmd_LastWeapon_f() {

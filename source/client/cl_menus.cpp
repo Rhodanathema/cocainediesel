@@ -1,6 +1,7 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_internal.h"
 
+#include "client/assets.h"
 #include "client/client.h"
 #include "client/demo_browser.h"
 #include "client/server_browser.h"
@@ -14,8 +15,6 @@
 
 #define GLFW_INCLUDE_NONE
 #include "glfw3/GLFW/glfw3.h"
-
-#include "glad/glad.h"
 
 enum UIState {
 	UIState_Hidden,
@@ -69,6 +68,11 @@ static SettingsState settings_state;
 static bool reset_video_settings;
 static float sensivity_range[] = { 0.25f, 10.f };
 
+static size_t selected_mask = 0;
+static NonRAIIDynamicArray< char * > masks;
+static const char * masks_folder = "models/masks/";
+
+
 static void PushButtonColor( ImVec4 color ) {
 	ImGui::PushStyleColor( ImGuiCol_Button, color );
 	ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4( color.x + 0.125f, color.y + 0.125f, color.z + 0.125f, color.w ) );
@@ -79,13 +83,54 @@ static void ResetServerBrowser() {
 	selected_server = -1;
 }
 
+static void ClearMasksList() {
+	for( char * mask : masks ) {
+		FREE( sys_allocator, mask );
+	}
+	masks.clear();
+}
+
+static void SetMask( const char * mask_name ) {
+	TempAllocator temp = cls.frame_arena.temp();
+	char * path = temp( "{}{}", masks_folder, mask_name );
+	Cvar_Set( "cg_mask", path );
+}
+
+static void RefreshMasksList() {
+	TracyZoneScoped;
+
+	TempAllocator temp = cls.frame_arena.temp();
+	ClearMasksList();
+
+	masks.add( CopyString( sys_allocator, "None" ) );
+	for( const char * path : AssetPaths() ) {
+		if( !StartsWith( path, masks_folder ) || !EndsWith( path, ".glb" ) )
+			continue;
+
+		masks.add( ( *sys_allocator )( "{}", StripPrefix( StripExtension( path ), masks_folder ) ) );
+	}
+
+
+	const char * mask = Cvar_String( "cg_mask" );
+	for( size_t i = 0; i < masks.size(); i++ ) {
+		if( StrEqual( mask, temp( "{}{}", masks_folder, masks[ i ] ) ) ) {
+			selected_mask = i;
+			return;
+		}
+	}
+
+	SetMask( masks[ 0 ] );
+}
+
 static void Refresh() {
 	ResetServerBrowser();
 	RefreshServerBrowser();
 }
 
 void UI_Init() {
+	masks.init( sys_allocator );
 	ResetServerBrowser();
+	RefreshMasksList();
 	yolodemo = false;
 	// InitParticleMenuEffect();
 
@@ -96,6 +141,8 @@ void UI_Init() {
 }
 
 void UI_Shutdown() {
+	ClearMasksList();
+	masks.shutdown();
 	// ShutdownParticleEditor();
 }
 
@@ -170,12 +217,18 @@ static void KeyBindButton( const char * label, const char * command ) {
 	}
 
 	if( ImGui::BeginPopupModal( label, NULL, ImGuiWindowFlags_NoDecoration ) ) {
-		ImGui::Text( "Press a key to set a new bind, or press ESCAPE to cancel." );
+		ImGui::Text( "Press a key to set a new bind, or press DEL to delete it (ESCAPE to cancel)" );
 
 		ImGuiIO & io = ImGui::GetIO();
 		for( size_t i = 0; i < ARRAY_COUNT( io.KeysDown ); i++ ) {
 			if( ImGui::IsKeyPressed( i ) ) {
-				if( i != K_ESCAPE ) {
+				if( i == K_DEL ) {
+					int binds[ 2 ];
+					int num_binds = CG_GetBoundKeycodes( command, binds );
+					for( int j = 0; j < num_binds; j++ ) {
+						Key_SetBinding( binds[ j ], NULL );
+					}
+				} else if( i != K_ESCAPE ) {
 					Key_SetBinding( i, command );
 				}
 				ImGui::CloseCurrentPopup();
@@ -244,6 +297,26 @@ static const char * SelectablePlayerList() {
 	return ( selected_player < players.size() ? players[ selected_player ] : "" );
 }
 
+static void MasksList() {
+	SettingLabel( "Mask" );
+
+	ImGui::PushItemWidth( 200 );
+	if( ImGui::BeginCombo( "##masks", masks[ selected_mask ] ) ) {
+		for( size_t i = 0; i < masks.size(); i++ ) {
+			if( ImGui::Selectable( masks[ i ], i == selected_mask ) ) {
+				selected_mask = i;
+				SetMask( masks[ i ] );
+			}
+
+			if( i == selected_mask ) {
+				ImGui::SetItemDefaultFocus();
+			}
+		}
+		ImGui::EndCombo();
+	}
+	ImGui::PopItemWidth();
+}
+
 static void SettingsGeneral() {
 	TempAllocator temp = cls.frame_arena.temp();
 
@@ -256,13 +329,20 @@ static void SettingsGeneral() {
 	CvarCheckbox( "Show chat", "cg_chat" );
 	CvarCheckbox( "Show hotkeys", "cg_showHotkeys" );
 	CvarCheckbox( "Show FPS", "cg_showFPS" );
-	CvarCheckbox( "Show speed", "cg_showSpeed" );
+
+	MasksList();
 }
 
 static void SettingsControls() {
 	TempAllocator temp = cls.frame_arena.temp();
 
 	ImGui::BeginChild( "binds" );
+
+	PushButtonColor( ImVec4( 0.375f, 0.f, 0.f, 0.75f ) );
+	if( ImGui::Button("Reset to default") ) {
+		Key_Unbindall();
+		ExecDefaultCfg();
+	} ImGui::PopStyleColor( 3 );
 
 	if( ImGui::BeginTabBar( "##binds", ImGuiTabBarFlags_None ) ) {
 		if( ImGui::BeginTabItem( "Game" ) ) {
@@ -307,6 +387,7 @@ static void SettingsControls() {
 
 		if( ImGui::BeginTabItem( "Mouse" ) ) {
 			CvarSliderFloat( "Sensitivity", "sensitivity", sensivity_range[ 0 ], sensivity_range[ 1 ] );
+			ImGui::Text( "Sensitivity is the same as CSGO/TF2/etc" );
 			CvarSliderFloat( "Horizontal sensitivity", "horizontalsensscale", 0.5f, 2.0f );
 			CvarCheckbox( "Invert Y axis", "m_invertY" );
 
@@ -317,8 +398,10 @@ static void SettingsControls() {
 			KeyBindButton( "Acne pack", "vsay acne" );
 			KeyBindButton( "Fart pack", "vsay fart" );
 			KeyBindButton( "Guyman pack", "vsay guyman" );
+			KeyBindButton( "Dodonga pack", "vsay dodonga" );
 			KeyBindButton( "Helena pack", "vsay helena" );
 			KeyBindButton( "Larp pack", "vsay larp" );
+			KeyBindButton( "Fam pack", "vsay fam" );
 			KeyBindButton( "Mike pack", "vsay mike" );
 			KeyBindButton( "User pack", "vsay user" );
 			KeyBindButton( "Valley pack", "vsay valley" );
@@ -625,13 +708,9 @@ static void ServerBrowser() {
 	ImGui::TextWrapped( "This game is very pre-alpha so there are probably 0 players online. Join the Discord to find games!" );
 	ImGui::Separator();
 
-	char server_filter[ 256 ] = { };
 	if( ImGui::Button( "Refresh" ) ) {
 		Refresh();
 	}
-	ImGui::AlignTextToFramePadding();
-	ImGui::SameLine(); ImGui::Text( "Search");
-	ImGui::SameLine(); ImGui::InputText( "##server_filter", server_filter, sizeof( server_filter ) );
 
 	ImGui::BeginChild( "servers" );
 	ImGui::Columns( 4, "serverbrowser", false );
@@ -647,25 +726,20 @@ static void ServerBrowser() {
 
 	Span< const ServerBrowserEntry > servers = GetServerBrowserEntries();
 	for( size_t i = 0; i < servers.n; i++ ) {
-		if( !servers[ i ].have_details )
-			continue;
-
-		if( strstr( servers[ i ].name, server_filter ) != NULL ) {
-			if( ImGui::Selectable( servers[ i ].name, i == selected_server, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick ) ) {
-				if( ImGui::IsMouseDoubleClicked( 0 ) ) {
-					CL_Connect( servers[ i ].address );
-				}
-				selected_server = i;
+		if( ImGui::Selectable( servers[ i ].name, i == selected_server, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick ) ) {
+			if( ImGui::IsMouseDoubleClicked( 0 ) ) {
+				CL_Connect( servers[ i ].address );
 			}
-			ImGui::NextColumn();
-
-			ImGui::Text( "%s", servers[ i ].map );
-			ImGui::NextColumn();
-			ImGui::Text( "%d/%d", servers[ i ].num_players, servers[ i ].max_players );
-			ImGui::NextColumn();
-			ImGui::Text( "%d", servers[ i ].ping );
-			ImGui::NextColumn();
+			selected_server = i;
 		}
+		ImGui::NextColumn();
+
+		ImGui::Text( "%s", servers[ i ].map );
+		ImGui::NextColumn();
+		ImGui::Text( "%d/%d", servers[ i ].num_players, servers[ i ].max_players );
+		ImGui::NextColumn();
+		ImGui::Text( "%d", servers[ i ].ping );
+		ImGui::NextColumn();
 	}
 
 	ImGui::Columns( 1 );
@@ -759,7 +833,7 @@ static void MainMenu() {
 	ImGui::SetNextWindowSize( ImVec2( frame_static.viewport_width, frame_static.viewport_height ) );
 
 	bool parteditor_wason = mainmenu_state == MainMenuState_ParticleEditor;
-	ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoBackground;
+	ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_Interactive;
 
 	ImGui::Begin( "mainmenu", WindowZOrder_Menu, flags );
 
@@ -876,13 +950,13 @@ static void MainMenu() {
 			ImGui::Text( "Dexter - programming" );
 			ImGui::Text( "general adnic - voice acting" );
 			ImGui::Text( "goochie - art & programming" );
-			ImGui::Text( "MSC - programming" );
 			ImGui::Text( "MikeJS - programming" );
+			ImGui::Text( "MSC - programming & art" );
 			ImGui::Text( "Obani - music & fx & programming" );
+			ImGui::Text( "Rhodanathema - art" );
 			ImGui::Separator();
 			ImGui::Text( "jwzr - medical research" );
 			ImGui::Text( "naxeron - chief propagandist" );
-			ImGui::Text( "Rhodanathema - chief technical ceo of gameplay and forward-thinking design developments" );
 			ImGui::Text( "zmiles - american cultural advisor" );
 			ImGui::Separator();
 			ImGui::Text( "Special thanks to the Warsow team except for slk and MWAGA" );
@@ -1020,15 +1094,16 @@ static bool LoadoutMenu( Vec2 displaySize ) {
 	ImGui::PushStyleColor( ImGuiCol_WindowBg, IM_COL32( 0x1a, 0x1a, 0x1a, 255 ) );
 	ImGui::SetNextWindowPos( Vec2( 0, 0 ) );
 	ImGui::SetNextWindowSize( displaySize );
-	ImGui::Begin( "Loadout", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus );
+	ImGui::Begin( "Loadout", WindowZOrder_Menu, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_Interactive );
 
 	ImGui::PushStyleVar( ImGuiStyleVar_ItemSpacing, Vec2( 0, displaySize.y * 0.02 ) );
-	Vec2 icon_size = Vec2( displaySize.x * 0.05f );
+	Vec2 icon_size = Vec2( displaySize.x * 0.04f );
 
 	int cols = 0;
 	cols = Max2( CountWeaponCategory( WeaponCategory_Primary ), cols );
 	cols = Max2( CountWeaponCategory( WeaponCategory_Secondary ), cols );
 	cols = Max2( CountWeaponCategory( WeaponCategory_Backup ), cols );
+	cols = Max2( CountWeaponCategory( WeaponCategory_Melee ), cols );
 	cols = Max2( int( Gadget_Count ) - 1, cols );
 	cols = Max2( int( Perk_Count ) - 1, cols );
 
@@ -1038,6 +1113,7 @@ static bool LoadoutMenu( Vec2 displaySize ) {
 	LoadoutCategory( "PRIMARY", WeaponCategory_Primary, icon_size );
 	LoadoutCategory( "SECONDARY", WeaponCategory_Secondary, icon_size );
 	LoadoutCategory( "BACKUP", WeaponCategory_Backup, icon_size );
+	LoadoutCategory( "MELEE", WeaponCategory_Melee, icon_size );
 	Gadgets( icon_size );
 
 	ImGui::EndTable();
@@ -1076,7 +1152,7 @@ static void GameMenu() {
 	if( gamemenu_state == GameMenuState_Menu ) {
 		ImGui::SetNextWindowPos( displaySize * 0.5f, 0, Vec2( 0.5f ) );
 		ImGui::SetNextWindowSize( ImVec2( 500, 0 ) );
-		ImGui::Begin( "gamemenu", WindowZOrder_Menu, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus );
+		ImGui::Begin( "gamemenu", WindowZOrder_Menu, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_Interactive );
 		ImGuiStyle & style = ImGui::GetStyle();
 		const double half = ImGui::GetWindowWidth() / 2 - style.ItemSpacing.x - style.ItemInnerSpacing.x;
 
@@ -1128,7 +1204,7 @@ static void GameMenu() {
 		TempAllocator temp = cls.frame_arena.temp();
 		ImGui::SetNextWindowPos( displaySize * 0.5f, ImGuiCond_Always, ImVec2( 0.5f, 0.5f ) );
 		ImGui::SetNextWindowSize( ImVec2( displaySize.x * 0.5f, -1 ) );
-		ImGui::Begin( "votemap", WindowZOrder_Menu, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus );
+		ImGui::Begin( "votemap", WindowZOrder_Menu, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_Interactive );
 
 		static int e = 0;
 		ImGui::Columns( 2, NULL, false );
@@ -1158,14 +1234,15 @@ static void GameMenu() {
 	else if( gamemenu_state == GameMenuState_Settings ) {
 		ImGui::SetNextWindowPos( displaySize * 0.5f, ImGuiCond_Always, ImVec2( 0.5f, 0.5f ) );
 		ImGui::SetNextWindowSize( ImVec2( Max2( 800.f, displaySize.x * 0.65f ), Max2( 600.f, displaySize.y * 0.65f ) ) );
-		ImGui::Begin( "settings", WindowZOrder_Menu, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus );
+		ImGui::Begin( "settings", WindowZOrder_Menu, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_Interactive );
 
 		Settings();
 	}
+	
+	ImGui::SetWindowFocus();
 
 	if( ImGui::Hotkey( K_ESCAPE ) || should_close ) {
 		uistate = UIState_Hidden;
-		CL_SetKeyDest( key_game );
 	}
 
 	ImGui::End();
@@ -1184,7 +1261,7 @@ static void DemoMenu() {
 	if( demomenu_state == DemoMenuState_Menu ) {
 		ImGui::SetNextWindowPos( pos, ImGuiCond_Always, ImVec2( 0.5f, 0.5f ) );
 		ImGui::SetNextWindowSize( ImVec2( 600, 0 ) );
-		ImGui::Begin( "demomenu", WindowZOrder_Menu, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus );
+		ImGui::Begin( "demomenu", WindowZOrder_Menu, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_Interactive );
 
 		ImGuiStyle & style = ImGui::GetStyle();
 		const double half = ImGui::GetWindowWidth() / 2 - style.ItemSpacing.x - style.ItemInnerSpacing.x;
@@ -1217,14 +1294,13 @@ static void DemoMenu() {
 	} else if( demomenu_state == DemoMenuState_Settings ) {
 		ImGui::SetNextWindowPos( displaySize * 0.5f, ImGuiCond_Always, ImVec2( 0.5f, 0.5f ) );
 		ImGui::SetNextWindowSize( ImVec2( Max2( 800.f, displaySize.x * 0.65f ), Max2( 600.f, displaySize.y * 0.65f ) ) );
-		ImGui::Begin( "settings", WindowZOrder_Menu, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus );
+		ImGui::Begin( "settings", WindowZOrder_Menu, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_Interactive );
 
 		Settings();
 	}
 
 	if( ImGui::Hotkey( K_ESCAPE ) || should_close ) {
 		uistate = UIState_Hidden;
-		CL_SetKeyDest( key_game );
 	}
 
 	ImGui::End();
@@ -1263,7 +1339,7 @@ void UI_Refresh() {
 		const char * connecting = "Connecting...";
 		ImGui::SetNextWindowPos( ImVec2() );
 		ImGui::SetNextWindowSize( ImVec2( frame_static.viewport_width, frame_static.viewport_height ) );
-		ImGui::Begin( "mainmenu", WindowZOrder_Menu, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus );
+		ImGui::Begin( "mainmenu", WindowZOrder_Menu, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_Interactive );
 
 		ImGui::PushFont( cls.large_font );
 		ImGui::SetCursorPos( ( ImGui::GetWindowSize() - ImGui::CalcTextSize( connecting ) )/2 );
@@ -1295,7 +1371,6 @@ void UI_ShowGameMenu() {
 
 	uistate = UIState_GameMenu;
 	gamemenu_state = GameMenuState_Menu;
-	CL_SetKeyDest( key_menu );
 }
 
 void UI_ShowDemoMenu() {
@@ -1304,7 +1379,6 @@ void UI_ShowDemoMenu() {
 
 	uistate = UIState_DemoMenu;
 	demomenu_state = DemoMenuState_Menu;
-	CL_SetKeyDest( key_menu );
 }
 
 void UI_HideMenu() {
@@ -1314,8 +1388,5 @@ void UI_HideMenu() {
 void UI_ShowLoadoutMenu( Loadout new_loadout ) {
 	uistate = UIState_GameMenu;
 	gamemenu_state = GameMenuState_Loadout;
-
 	loadout = new_loadout;
-
-	CL_SetKeyDest( key_menu );
 }

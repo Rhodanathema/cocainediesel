@@ -34,15 +34,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 * Does NOT validate the string at all
 * Must be used before other functions are aplied to the string (or those functions might function improperly)
 */
-char *COM_SanitizeFilePath( char *path ) {
-	char *p;
-
+char *COM_SanitizeFilePath( char * path ) {
 	assert( path );
 
-	p = path;
-	while( *p && ( p = strchr( p, '\\' ) ) ) {
-		*p = '/';
-		p++;
+	for( ; *path && ( path = strchr( path, '\\' ) ); path++ ) {
+		*path = '/';
 	}
 
 	return path;
@@ -271,10 +267,14 @@ const char * StrRChr( Span< const char > str, char c ) {
 	return StrRChrSpan( str, c, true ).ptr;
 }
 
-bool StartsWith( Span< const char > str, const char * prefix ) {
-	if( str.n < strlen( prefix ) )
+bool StartsWith( Span< const char > str, Span< const char > prefix ) {
+	if( str.n < prefix.n )
 		return false;
-	return memcmp( str.ptr, prefix, strlen( prefix ) ) == 0;
+	return memcmp( str.ptr, prefix.ptr, prefix.n ) == 0;
+}
+
+bool StartsWith( Span< const char > str, const char * prefix ) {
+	return StartsWith( str, MakeSpan( prefix ) );
 }
 
 bool StartsWith( const char * str, const char * prefix ) {
@@ -637,7 +637,7 @@ void Info_RemoveKey( char *info, const char *key ) {
 		return;
 	}
 
-	while( 1 ) {
+	while( true ) {
 		char *start, *p;
 
 		p = Info_FindKey( info, key );
@@ -721,4 +721,8 @@ void operator++( GadgetType & x, int ) {
 void operator++( PerkType & x, int ) {
 	using T = typename std::underlying_type< PerkType >::type;
 	x = PerkType( T( x ) + 1 );
+}
+
+void operator|=( UserCommandButton & lhs, UserCommandButton rhs ) {
+	lhs = UserCommandButton( lhs | rhs );
 }

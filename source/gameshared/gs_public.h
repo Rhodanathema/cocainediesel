@@ -71,18 +71,15 @@ struct pmove_t {
 	Vec3 mins, maxs;          // bounding box size
 
 	int groundentity;
-	int watertype;
-	int waterlevel;
-
 	int contentmask;
 };
 
 struct gs_module_api_t {
 	void ( *Trace )( trace_t *t, Vec3 start, Vec3 mins, Vec3 maxs, Vec3 end, int ignore, int contentmask, int timeDelta );
 	SyncEntityState *( *GetEntityState )( int entNum, int deltaTime );
-	int ( *PointContents )( Vec3 point, int timeDelta );
 	void ( *PredictedEvent )( int entNum, int ev, u64 parm );
-	void ( *PredictedFireWeapon )( int entNum, u64 weapon_and_entropy );
+	void ( *PredictedFireWeapon )( int entNum, u64 parm );
+	void ( *PredictedAltFireWeapon )( int entNum, u64 parm );
 	void ( *PredictedUseGadget )( int entNum, GadgetType gadget, u64 parm );
 	void ( *PMoveTouchTriggers )( pmove_t *pm, Vec3 previous_origin );
 };
@@ -139,49 +136,14 @@ Team GS_TeamFromName( const char * name );
 // gs_misc.c
 Vec3 GS_EvaluateJumppad( const SyncEntityState * jumppad, Vec3 velocity );
 void GS_TouchPushTrigger( const gs_state_t * gs, SyncPlayerState * playerState, const SyncEntityState * pusher );
-int GS_WaterLevel( const gs_state_t * gs, SyncEntityState *state, Vec3 mins, Vec3 maxs );
 
 //===============================================================
 
 // pmove->pm_features
 #define PMFEAT_ABILITIES        ( 1 << 0 )
 #define PMFEAT_SCOPE            ( 1 << 1 )
-#define PMFEAT_GHOSTMOVE        ( 1 << 2 )
 
 #define PMFEAT_ALL              ( 0xFFFF )
-
-enum DamageCategory {
-	DamageCategory_Weapon,
-	DamageCategory_Gadget,
-	DamageCategory_World,
-};
-
-enum WorldDamage : u8 {
-	WorldDamage_Slime,
-	WorldDamage_Lava,
-	WorldDamage_Crush,
-	WorldDamage_Telefrag,
-	WorldDamage_Suicide,
-	WorldDamage_Explosion,
-
-	WorldDamage_Trigger,
-
-	WorldDamage_Laser,
-	WorldDamage_Spike,
-	WorldDamage_Void,
-};
-
-struct DamageType {
-	u8 encoded;
-
-	DamageType() = default;
-	DamageType( WeaponType weapon );
-	DamageType( GadgetType gadget );
-	DamageType( WorldDamage world );
-};
-
-bool operator==( DamageType a, DamageType b );
-bool operator!=( DamageType a, DamageType b );
 
 DamageCategory DecodeDamageType( DamageType type, WeaponType * weapon, GadgetType * gadget, WorldDamage * world );
 
@@ -207,15 +169,17 @@ enum {
 
 	Vsay_Acne,
 	Vsay_Valley,
+	Vsay_Fam,
 	Vsay_Mike,
 	Vsay_User,
 	Vsay_Guyman,
+	Vsay_Dodonga,
 	Vsay_Helena,
 	Vsay_Fart,
 	Vsay_Zombie,
 	Vsay_Larp,
 
-	Vsay_Total
+	Vsay_Count
 };
 
 // SyncEntityState->event values
@@ -227,6 +191,7 @@ enum EventType {
 
 	EV_WEAPONACTIVATE,
 	EV_FIREWEAPON,
+	EV_ALTFIREWEAPON,
 	EV_USEGADGET,
 	EV_SMOOTHREFIREWEAPON,
 	EV_NOAMMOCLICK,
@@ -237,6 +202,7 @@ enum EventType {
 	EV_DASH,
 
 	EV_WALLJUMP,
+	EV_CHARGEJUMP,
 	EV_JETPACK,
 	EV_JUMP,
 	EV_JUMP_PAD,
@@ -252,6 +218,7 @@ enum EventType {
 
 	EV_PAIN,
 	EV_DIE,
+	EV_RESPAWN,
 
 	EV_PLAYER_RESPAWN,
 	EV_PLAYER_TELEPORT_IN,
@@ -262,6 +229,8 @@ enum EventType {
 
 	EV_GRENADE_BOUNCE,
 	EV_GRENADE_EXPLOSION,
+	EV_RAIL_ALTENT,
+	EV_RAIL_ALTFIRE,
 	EV_ROCKET_EXPLOSION,
 	EV_ARBULLET_EXPLOSION,
 	EV_BUBBLE_EXPLOSION,
@@ -273,6 +242,9 @@ enum EventType {
 	EV_BLAST_IMPACT,
 	EV_STICKY_EXPLOSION,
 	EV_STICKY_IMPACT,
+
+	EV_AXE_HIT,
+	EV_AXE_IMPACT,
 
 	EV_STUN_GRENADE_EXPLOSION,
 

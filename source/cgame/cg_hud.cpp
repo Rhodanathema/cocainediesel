@@ -226,6 +226,8 @@ static const char * conjunctions[] = {
 	"AS WELL AS",
 	"ASSISTED BY",
 	"FEAT.",
+	"GEULIGO",
+	"JA",
 	"N'",
 	"PLUS",
 	"UND",
@@ -373,10 +375,6 @@ static const Material * DamageTypeToIcon( DamageType type ) {
 	}
 
 	switch( world ) {
-		case WorldDamage_Slime:
-			return FindMaterial( "hud/icons/obituaries/slime" );
-		case WorldDamage_Lava:
-			return FindMaterial( "hud/icons/obituaries/lava" );
 		case WorldDamage_Crush:
 			return FindMaterial( "hud/icons/obituaries/crush" );
 		case WorldDamage_Telefrag:
@@ -1377,7 +1375,7 @@ static YGNodeRef LuauYogaNodeRecursive( ArenaAllocator * temp, lua_State * L ) {
 	if( !lua_isnil( L, -1 ) ) {
 		luaL_checktype( L, 1, LUA_TTABLE );
 
-		for( size_t i = 0; i < lua_objlen( L, -1 ); i++ ) {
+		for( int i = 0; i < lua_objlen( L, -1 ); i++ ) {
 			lua_pushnumber( L, i + 1 );
 			lua_gettable( L, -2 );
 			YGNodeRef child = LuauYogaNodeRecursive( temp, L );
@@ -1650,9 +1648,10 @@ void CG_InitHUD() {
 void CG_ShutdownHUD() {
 	if( hud_L != NULL ) {
 		lua_close( hud_L );
-		YGConfigFree( yoga_config );
-		FREE( sys_allocator, yoga_arena_memory );
 	}
+
+	YGConfigFree( yoga_config );
+	FREE( sys_allocator, yoga_arena_memory );
 
 	RemoveCommand( "toggleuiinspector" );
 }
@@ -1721,6 +1720,9 @@ void CG_DrawHUD() {
 
 	lua_pushnumber( hud_L, cg.predictedPlayerState.pmove.stamina_state );
 	lua_setfield( hud_L, -2, "stamina_state" );
+
+	lua_pushboolean( hud_L, cg.predictedPlayerState.pmove.pm_type == PM_SPECTATOR );
+	lua_setfield( hud_L, -2, "ghost" );
 
 	lua_pushnumber( hud_L, cg.predictedPlayerState.team );
 	lua_setfield( hud_L, -2, "team" );
@@ -1812,13 +1814,14 @@ void CG_DrawHUD() {
 	lua_setfield( hud_L, -2, "viewport_height" );
 
 	lua_createtable( hud_L, Weapon_Count - 1, 0 );
+
 	for( size_t i = 0; i < ARRAY_COUNT( cg.predictedPlayerState.weapons ); i++ ) {
+		const WeaponDef * def = GS_GetWeaponDef( cg.predictedPlayerState.weapons[ i ].weapon );
+
 		if( cg.predictedPlayerState.weapons[ i ].weapon == Weapon_None )
 			continue;
 
-		const WeaponDef * def = GS_GetWeaponDef( cg.predictedPlayerState.weapons[ i ].weapon );
-
-		lua_pushnumber( hud_L, i + 1 );
+		lua_pushnumber( hud_L, i + 1 ); // arrays start at 1 in lua
 		lua_createtable( hud_L, 0, 4 );
 
 		lua_pushnumber( hud_L, cg.predictedPlayerState.weapons[ i ].weapon );
@@ -1831,6 +1834,7 @@ void CG_DrawHUD() {
 		lua_setfield( hud_L, -2, "max_ammo" );
 
 		lua_settable( hud_L, -3 );
+
 	}
 	lua_setfield( hud_L, -2, "weapons" );
 
@@ -1838,7 +1842,7 @@ void CG_DrawHUD() {
 	ImGuiStyle old_style = ImGui::GetStyle();
 	ImGui::GetStyle() = ImGuiStyle();
 	if( show_inspector ) {
-		ImGui::Begin( "UI inspector", &still_showing_inspector );
+		ImGui::Begin( "UI inspector", &still_showing_inspector, ImGuiWindowFlags_Interactive );
 	}
 
 	inspecting = { };

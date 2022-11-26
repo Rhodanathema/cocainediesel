@@ -131,7 +131,7 @@ int Key_StringToKeynum( const char *str ) {
 Span< const char > Key_KeynumToString( int keynum ) {
 	static constexpr const char uppercase_ascii[] = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`ABCDEFGHIJKLMNOPQRSTUVWXYZ{|}~";
 
-	if( keynum > 32 && keynum < 127 ) {
+	if( keynum >= '!' && keynum <= '~' ) {
 		return Span< const char >( uppercase_ascii + keynum - '!', 1 );
 	}
 
@@ -170,7 +170,7 @@ static void Key_Unbind_f() {
 	Key_SetBinding( key, NULL );
 }
 
-static void Key_Unbindall() {
+void Key_Unbindall() {
 	for( int i = 0; i < int( ARRAY_COUNT( keybindings ) ); i++ ) {
 		if( keybindings[ i ] ) {
 			Key_SetBinding( i, NULL );
@@ -226,6 +226,9 @@ void Key_Init() {
 	AddCommand( "bind", Key_Bind_f );
 	AddCommand( "unbind", Key_Unbind_f );
 	AddCommand( "unbindall", Key_Unbindall );
+
+	memset( keybindings, 0, sizeof( keybindings ) );
+	memset( keydown, 0, sizeof( keydown ) );
 }
 
 void Key_Shutdown() {
@@ -238,7 +241,7 @@ void Key_Shutdown() {
 
 void Key_Event( int key, bool down ) {
 	if( key == K_ESCAPE ) {
-		if( cls.key_dest != key_game || !down ) {
+		if( !down ) {
 			return;
 		}
 
@@ -252,7 +255,7 @@ void Key_Event( int key, bool down ) {
 		return;
 	}
 
-	if( cls.state == CA_ACTIVE && ( cls.key_dest == key_game || !down || ( key >= K_F1 && key <= K_F12 ) ) ) {
+	if( cls.state == CA_ACTIVE ) {
 		const char * command = keybindings[ key ];
 		if( command != NULL ) {
 			if( StartsWith( command, "+" ) ) {

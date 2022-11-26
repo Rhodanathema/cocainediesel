@@ -95,10 +95,12 @@ static void CG_ViewWeapon_AddAngleEffects( Vec3 * angles, cg_viewweapon_t * view
 			frac *= frac; //smoother curve
 			angles->x += Lerp( 0.0f, frac, 60.0f );
 		}
-		else if( ps->weapon == Weapon_Railgun && ps->weapon_state == WeaponState_Cooking ) {
+		else if( ps->weapon == Weapon_Bat && ps->weapon_state == WeaponState_Cooking ) {
 			float charge = float( ps->weapon_state_time ) / float( def->reload_time );
 			float pull_back = ( 1.0f - Square( 1.0f - charge ) ) * 4.0f;
 			viewweapon->origin -= FromQFAxis( cg.view.axis, AXIS_FORWARD ) * pull_back;
+			angles->x -= pull_back * 10.0f;
+			angles->y += pull_back * 2.0f;
 		}
 	}
 
@@ -122,13 +124,7 @@ void CG_ViewWeapon_AddAnimation( int ent_num, StringHash anim ) {
 
 void CG_CalcViewWeapon( cg_viewweapon_t * viewweapon ) {
 	const SyncPlayerState * ps = &cg.predictedPlayerState;
-	const Model * model;
-	if( !ps->using_gadget ) {
-		model = GetWeaponModelMetadata( ps->weapon )->model;
-	}
-	else {
-		model = GetGadgetModelMetadata( ps->gadget )->model;
-	}
+	const Model * model = GetEquippedModelMetadata( ps );
 
 	if( model == NULL )
 		return;
@@ -174,18 +170,6 @@ void CG_CalcViewWeapon( cg_viewweapon_t * viewweapon ) {
 	// finish
 	AnglesToAxis( gunAngles, viewweapon->axis );
 
-	if( cg.predictedPlayerState.zoom_time == 0 ) {
-		constexpr float gun_fov = 90.0f;
-		float gun_fov_y = WidescreenFov( gun_fov );
-		float gun_fov_x = CalcHorizontalFov( "CalcViewWeapon", gun_fov_y, frame_static.viewport_width, frame_static.viewport_height );
-
-		float fracWeapFOV = tanf( Radians( gun_fov_x ) * 0.5f ) / cg.view.fracDistFOV;
-
-		viewweapon->axis[AXIS_FORWARD] *= fracWeapFOV;
-		viewweapon->axis[AXIS_FORWARD + 1] *= fracWeapFOV;
-		viewweapon->axis[AXIS_FORWARD + 2] *= fracWeapFOV;
-	}
-
 	Mat4 gun_transform = FromAxisAndOrigin( viewweapon->axis, viewweapon->origin );
 	u8 muzzle;
 	if( FindNodeByName( model, Hash32( "muzzle" ), &muzzle ) ) {
@@ -202,13 +186,7 @@ void CG_AddViewWeapon( cg_viewweapon_t * viewweapon ) {
 		return;
 
 	const SyncPlayerState * ps = &cg.predictedPlayerState;
-	const Model * model;
-	if( !ps->using_gadget ) {
-		model = GetWeaponModelMetadata( ps->weapon )->model;
-	}
-	else {
-		model = GetGadgetModelMetadata( ps->gadget )->model;
-	}
+	const Model * model = GetEquippedModelMetadata( ps );
 
 	if( model == NULL ) {
 		return;

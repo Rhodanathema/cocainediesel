@@ -50,8 +50,6 @@ Cvar *g_antilag_timenudge;
 Cvar *g_autorecord;
 Cvar *g_autorecord_maxdemos;
 
-Cvar *g_deadbody_followkiller;
-
 Cvar *g_allow_spectator_voting;
 
 /*
@@ -81,10 +79,10 @@ static void G_InitGameShared() {
 
 	server_gs.api.PredictedEvent = G_PredictedEvent;
 	server_gs.api.PredictedFireWeapon = G_PredictedFireWeapon;
+	server_gs.api.PredictedAltFireWeapon = G_PredictedAltFireWeapon;
 	server_gs.api.PredictedUseGadget = G_PredictedUseGadget;
 	server_gs.api.Trace = G_GS_Trace;
 	server_gs.api.GetEntityState = G_GetEntityStateForDeltaTime;
-	server_gs.api.PointContents = G_PointContents4D;
 	server_gs.api.PMoveTouchTriggers = G_PMoveTouchTriggers;
 }
 
@@ -125,7 +123,6 @@ void G_Init( unsigned int framemsec ) {
 
 	g_projectile_prestep = NewCvar( "g_projectile_prestep", temp( "{}", PROJECTILE_PRESTEP ), CvarFlag_Developer );
 	g_numbots = NewCvar( "g_numbots", "0", CvarFlag_Archive );
-	g_deadbody_followkiller = NewCvar( "g_deadbody_followkiller", "1", CvarFlag_Developer );
 	g_maxtimeouts = NewCvar( "g_maxtimeouts", "2", CvarFlag_Archive );
 	g_antilag_maxtimedelta = NewCvar( "g_antilag_maxtimedelta", "200", CvarFlag_Archive );
 	g_antilag_maxtimedelta->modified = true;
