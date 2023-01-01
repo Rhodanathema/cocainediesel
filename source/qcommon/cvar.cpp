@@ -239,15 +239,15 @@ bool Cvar_Command( Span< Span< const char > > tokens ) {
 	return true;
 }
 
-static void SetConfigCvar() {
-	if( Cmd_Argc() != 3 ) {
+static void SetConfigCvar( const char * args, Span< Span< const char > > tokens ) {
+	if( tokens.n != 3 ) {
 		Com_Printf( "usage: set <variable> <value>\n" );
 		return;
 	}
 
 	// TODO: if the variable already exists we should set it
 
-	u64 hash = CaseHash64( Cmd_Argv( 1 ) );
+	u64 hash = CaseHash64( tokens[ 1 ] );
 	u64 idx = config_entries_hashtable.size();
 	if( !config_entries_hashtable.get( hash, &idx ) ) {
 		if( !config_entries_hashtable.add( hash, idx ) ) {
@@ -255,12 +255,12 @@ static void SetConfigCvar() {
 			return;
 		}
 
-		config_entries[ idx ].name = CopyString( sys_allocator, Cmd_Argv( 1 ) );
+		config_entries[ idx ].name = ( *sys_allocator )( "{}", tokens[ 1 ] );
 		config_entries[ idx ].value = NULL;
 	}
 
 	FREE( sys_allocator, config_entries[ idx ].value );
-	config_entries[ idx ].value = CopyString( sys_allocator, Cmd_Argv( 2 ) );
+	config_entries[ idx ].value = ( *sys_allocator )( "{}", tokens[ 2 ] );
 }
 
 static void Cvar_Reset_f() {

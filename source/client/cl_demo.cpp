@@ -101,11 +101,6 @@ void CL_Record_f( const char * args, Span< Span< const char > > tokens ) {
 		return;
 	}
 
-	if( !COM_ValidateRelativeFilename( Cmd_Argv( 1 ) ) ) {
-		Com_Printf( "Invalid filename.\n" );
-		return;
-	}
-
 	record_demo_filename = ( *sys_allocator )( "{}/demos/{}" APP_DEMO_EXTENSION_STR, HomeDirPath(), Cmd_Argv( 1 ) );
 	COM_SanitizeFilePath( record_demo_filename );
 

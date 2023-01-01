@@ -123,11 +123,6 @@ void SV_Demo_Start_f( const char * args, Span< Span< const char > > tokens ) {
 		return;
 	}
 
-	if( !COM_ValidateRelativeFilename( tokens[ 1 ] ) ) {
-		Com_Printf( "Invalid filename.\n" );
-		return;
-	}
-
 	TempAllocator temp = svs.frame_arena.temp();
 	char * filename = temp( "{}/{}.cddemo", GetDemoDir( &temp ), tokens[ 1 ] );
 	COM_SanitizeFilePath( filename );
